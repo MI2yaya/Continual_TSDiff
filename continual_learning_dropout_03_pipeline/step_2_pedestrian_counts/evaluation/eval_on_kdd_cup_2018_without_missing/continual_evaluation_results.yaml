@@ -1,0 +1,34 @@
+checkpoint: ./continual_learning_dropout_03_pipeline/step_2_pedestrian_counts/training/pedestrian_counts_checkpoint_best.pth
+config:
+  checkpoint_path: ./continual_learning_dropout_03_pipeline/step_2_pedestrian_counts/training/pedestrian_counts_checkpoint_best.pth
+  context_length: 336
+  device: cuda:0
+  diffusion_config: diffusion_small_config
+  dropout_rate: 0.3
+  eval_datasets:
+  - kdd_cup_2018_without_missing
+  freq: H
+  init_skip: true
+  lr: 0.001
+  model: unconditional
+  normalization: mean
+  num_samples: 100
+  prediction_length: 24
+  sampler: ddpm
+  sampler_params:
+    guidance: quantile
+    scale: 2
+  use_features: false
+  use_lags: true
+evaluation_settings:
+  device: cuda:0
+  num_samples: 100
+results:
+- ND: 0.30910651789137195
+  NRMSE: 0.6978283701385557
+  checkpoint: ./continual_learning_dropout_03_pipeline/step_2_pedestrian_counts/training/pedestrian_counts_checkpoint_best.pth
+  dataset: kdd_cup_2018_without_missing
+  frequency: H
+  mean_wQuantileLoss: 0.2534004178418494
+  num_samples: 100
+  success: true

@@ -28,6 +28,7 @@ class TSDiff(TSDiffBase):
         use_lags=True,
         init_skip=True,
         lr=1e-3,
+        dropout_rate=0.3,
     ):
         super().__init__(
             backbone_parameters,
@@ -44,12 +45,14 @@ class TSDiff(TSDiffBase):
             use_features=use_features,
             use_lags=use_lags,
             lr=lr,
+            dropout_rate=dropout_rate,
         )
 
         self.freq = freq
         if use_lags:
             self.lags_seq = get_lags_for_freq(freq)
             backbone_parameters = backbone_parameters.copy()
+            backbone_parameters["dropout"] = dropout_rate
             backbone_parameters["input_dim"] += len(self.lags_seq)
             backbone_parameters["output_dim"] += len(self.lags_seq)
         else:

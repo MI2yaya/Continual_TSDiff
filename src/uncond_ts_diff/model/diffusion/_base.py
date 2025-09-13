@@ -42,9 +42,11 @@ class TSDiffBase(pl.LightningModule):
         use_features=False,
         use_lags=True,
         lr: float = 1e-3,
+        dropout_rate: float = 0.3,
     ):
         super().__init__()
         self.save_hyperparameters()
+        self.dropout_rate = dropout_rate # reg method 1: dropout
         self.timesteps = timesteps
         self.betas = diffusion_scheduler(timesteps)
         self.sqrt_one_minus_beta = torch.sqrt(1.0 - self.betas)

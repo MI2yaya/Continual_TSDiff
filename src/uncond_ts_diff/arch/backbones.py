@@ -77,8 +77,8 @@ class S4Layer(nn.Module):
 class S4Block(nn.Module):
     def __init__(self, d_model, dropout=0.0, expand=2, num_features=0):
         super().__init__()
+        # S4Layer already handles dropout internally
         self.s4block = S4Layer(d_model, dropout=dropout)
-
         self.time_linear = nn.Linear(d_model, d_model)
         self.tanh = nn.Tanh()
         self.sigm = nn.Sigmoid()
@@ -89,17 +89,25 @@ class S4Block(nn.Module):
             in_channels=d_model, out_channels=d_model, kernel_size=1
         )
         self.feature_encoder = nn.Conv1d(num_features, d_model, kernel_size=1)
+        
+
+        self.additional_dropout = nn.Dropout1d(dropout) if dropout > 0.0 else nn.Identity()
 
     def forward(self, x, t, features=None):
         t = self.time_linear(t)[:, None, :].repeat(1, x.shape[2], 1)
         t = t.transpose(-1, -2)
-        out, _ = self.s4block(x + t)
+        out, _ = self.s4block(x + t)  # S4Layer handles dropout internally
         if features is not None:
             out = out + self.feature_encoder(features)
         out = self.tanh(out) * self.sigm(out)
+        
+        # Apply additional dropout after activation but before final layers
+        out = self.additional_dropout(out)
+        
         out1 = self.out_linear1(out)
         out2 = self.out_linear2(out)
         return out1 + x, out2
+
 
 
 def Conv1dKaiming(in_channels, out_channels, kernel_size):

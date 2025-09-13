@@ -8,7 +8,7 @@ Evaluate backward transfer after each step
 set -e  # Exit on error
 
 # Configuration
-BASE_DIR="./continual_learning_pipeline"
+BASE_DIR="./continual_learning_dropout_03_pipeline"
 CONFIGS_DIR="./configs/train_tsdiff"
 EVAL_CONFIG="${CONFIGS_DIR}/eval_continual.yaml"
 
@@ -43,7 +43,8 @@ echo "Base directory: ${BASE_DIR}"
 echo
 
 # Initialize with KDD Cup checkpoint (already trained)
-CURRENT_CHECKPOINT="./01_kdd_cup/kdd_cup_2018_without_missing_checkpoint_best.pth"
+# CURRENT_CHECKPOINT="./01_kdd_cup/kdd_cup_2018_without_missing_checkpoint_best.pth"
+CURRENT_CHECKPOINT="./test_dropout_03/kdd_cup_2018_without_missing_checkpoint_best.pth"
 echo "Starting with KDD Cup checkpoint: ${CURRENT_CHECKPOINT}"
 
 # Verify starting checkpoint exists

@@ -180,11 +180,12 @@ class TSDiffTrainer:
             prediction_length=self.config["prediction_length"],
             lr=self.config["lr"],
             init_skip=self.config["init_skip"],
+            dropout_rate=self.config.get("dropout_rate", 0.3),  # ADD THIS LINE
         )
         model.to(self.device)
-        logger.info(f"Model created and moved to {self.device}")
+        logger.info(f"Model created with dropout_rate={self.config.get('dropout_rate', 0.3)}")
         return model
-    
+
     def _create_optimizer(self) -> torch.optim.Optimizer:
         """Create optimizer"""
         return optim.Adam(self.model.parameters(), lr=self.config["lr"])

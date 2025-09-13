@@ -52,7 +52,6 @@ class TSDiffEvaluator:
     def _load_model_from_checkpoint(self) -> TSDiff:
         """Load TSDiff model from checkpoint"""
         logger.info(f"Loading model from checkpoint: {self.checkpoint_path}")
-        
         try:
             # Load checkpoint
             checkpoint = torch.load(self.checkpoint_path, map_location='cpu')
@@ -68,19 +67,20 @@ class TSDiffEvaluator:
                 prediction_length=self.config["prediction_length"],
                 lr=self.config["lr"],
                 init_skip=self.config["init_skip"],
+                dropout_rate=self.config.get("dropout_rate", 0.3),  # ADD THIS LINE
             )
             
             # Load model weights
             model.load_state_dict(checkpoint['model_state_dict'])
             model.to(self.device)
-            model.eval()
-            
+            model.eval()  # Important: This turns off dropout during evaluation
             logger.info("Model loaded successfully")
             return model
             
         except Exception as e:
             logger.error(f"Failed to load checkpoint: {e}")
             raise
+
     
     def evaluate_dataset(self, dataset_name: str, num_samples: int = 100) -> dict:
         """Evaluate model on specified dataset"""

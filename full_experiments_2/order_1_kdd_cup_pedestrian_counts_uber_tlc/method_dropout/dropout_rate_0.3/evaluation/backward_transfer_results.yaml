@@ -1,0 +1,90 @@
+backward_transfer_analysis:
+  forgetting_metrics: {}
+  performance_matrix:
+    kdd_cup_2018_without_missing:
+      1: null
+      2: null
+      3: null
+    pedestrian_counts:
+      2: null
+      3: null
+    uber_tlc_hourly:
+      3: null
+setup:
+  checkpoints:
+  - full_experiments_2/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.3/task_1_kdd_cup_2018_without_missing/kdd_cup_2018_without_missing_checkpoint_best.pth
+  - full_experiments_2/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.3/task_2_pedestrian_counts/pedestrian_counts_checkpoint_best.pth
+  - full_experiments_2/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.3/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth
+  datasets:
+  - kdd_cup_2018_without_missing
+  - pedestrian_counts
+  - uber_tlc_hourly
+  num_samples: 100
+  num_tasks: 3
+task_performance:
+- checkpoint: full_experiments_2/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.3/task_1_kdd_cup_2018_without_missing/kdd_cup_2018_without_missing_checkpoint_best.pth
+  evaluated_datasets:
+  - kdd_cup_2018_without_missing
+  results:
+  - ND: 0.277064545464426
+    NRMSE: 0.6432395257105314
+    checkpoint: full_experiments_2/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.3/task_1_kdd_cup_2018_without_missing/kdd_cup_2018_without_missing_checkpoint_best.pth
+    dataset: kdd_cup_2018_without_missing
+    frequency: H
+    mean_wQuantileLoss: 0.22624312058651855
+    num_samples: 100
+    success: true
+  task_id: 1
+- checkpoint: full_experiments_2/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.3/task_2_pedestrian_counts/pedestrian_counts_checkpoint_best.pth
+  evaluated_datasets:
+  - kdd_cup_2018_without_missing
+  - pedestrian_counts
+  results:
+  - ND: 0.33178074890414905
+    NRMSE: 0.70868358398778
+    checkpoint: full_experiments_2/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.3/task_2_pedestrian_counts/pedestrian_counts_checkpoint_best.pth
+    dataset: kdd_cup_2018_without_missing
+    frequency: H
+    mean_wQuantileLoss: 0.2695856646888008
+    num_samples: 100
+    success: true
+  - ND: 0.2181345070143172
+    NRMSE: 0.7631997250947566
+    checkpoint: full_experiments_2/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.3/task_2_pedestrian_counts/pedestrian_counts_checkpoint_best.pth
+    dataset: pedestrian_counts
+    frequency: H
+    mean_wQuantileLoss: 0.17714991517364492
+    num_samples: 100
+    success: true
+  task_id: 2
+- checkpoint: full_experiments_2/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.3/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth
+  evaluated_datasets:
+  - kdd_cup_2018_without_missing
+  - pedestrian_counts
+  - uber_tlc_hourly
+  results:
+  - ND: 0.8747268341167455
+    NRMSE: 1.39097340929334
+    checkpoint: full_experiments_2/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.3/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth
+    dataset: kdd_cup_2018_without_missing
+    frequency: H
+    mean_wQuantileLoss: 0.8279056647368365
+    num_samples: 100
+    success: true
+  - ND: 0.9297958378653584
+    NRMSE: 2.5273079091172015
+    checkpoint: full_experiments_2/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.3/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth
+    dataset: pedestrian_counts
+    frequency: H
+    mean_wQuantileLoss: 0.8992784552981813
+    num_samples: 100
+    success: true
+  - ND: 0.8663366868865378
+    NRMSE: 2.135364774084614
+    checkpoint: full_experiments_2/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.3/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth
+    dataset: uber_tlc_hourly
+    frequency: H
+    mean_wQuantileLoss: 0.8151605710448211
+    num_samples: 100
+    success: true
+  task_id: 3

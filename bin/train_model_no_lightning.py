@@ -125,15 +125,11 @@ class TSDiffTrainer:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Add continual learning parameters
         self.lambda_reg = config.get("lambda_reg", 0.0)
+        self.score_loss_type = config.get("score_loss_type", "l2")  # Add this line
         self.previous_model = None
-        
-        print(f"DEBUG: TSDiffTrainer initialized")
-        print(f"DEBUG: lambda_reg from config: {self.lambda_reg}")
-        print(f"DEBUG: Config keys: {list(config.keys())}")
-        
         logger.info(f"Continual learning lambda_reg: {self.lambda_reg}")
+
 
         # Setup device
         self.device = torch.device(config["device"])
@@ -152,6 +148,21 @@ class TSDiffTrainer:
         self.checkpoint_manager = ModelCheckpoint(self.output_dir, monitor='val_loss')
         self.early_stopping = EarlyStopping(patience=20)
         
+    def compute_weight_regularization_loss(self) -> torch.Tensor:
+        """Compute L1/L2 weight regularization loss"""
+        if self.l1_weight == 0.0 and self.l2_weight == 0.0:
+            return torch.tensor(0.0, device=self.device, requires_grad=False)
+        
+        l1_loss = torch.tensor(0.0, device=self.device)
+        l2_loss = torch.tensor(0.0, device=self.device)
+        
+        for param in self.model.parameters():
+            if param.requires_grad:
+                l1_loss += torch.sum(torch.abs(param))
+                l2_loss += torch.sum(param ** 2)
+        
+        total_reg_loss = self.l1_weight * l1_loss + self.l2_weight * l2_loss
+        return total_reg_loss
     def _load_dataset(self):
         """Load dataset with frequency auto-correction"""
         try:
@@ -337,71 +348,75 @@ class TSDiffTrainer:
             raise
 
 
-    def compute_score_regularization_loss(self, batch) -> torch.Tensor:
-        """Compute score function regularization loss"""
-        print(f"DEBUG: compute_score_regularization_loss called")
-        print(f"DEBUG: previous_model is None: {self.previous_model is None}")
-        print(f"DEBUG: lambda_reg: {self.lambda_reg}")
-        
+    def compute_score_regularization_loss(self, batch, loss_type="l2") -> torch.Tensor:
+        """Compute score function regularization loss with L1 or L2 distance"""
         if self.previous_model is None or self.lambda_reg == 0.0:
-            print(f"DEBUG: Returning 0 loss - previous_model={self.previous_model is None}, lambda_reg={self.lambda_reg}")
             return torch.tensor(0.0, device=self.device, requires_grad=False)
-        
-        print(f"DEBUG: Computing regularization loss...")
+
         try:
-            # Extract features from batch (reuse model's method)
+            # Extract features from batch
             if isinstance(batch, dict):
                 x, _, features = self.model._extract_features(batch)
             else:
                 x, _ = self.model.scaler(batch, torch.ones_like(batch))
                 features = None
-            
+
             # Sample random timesteps and noise
             batch_size = x.shape[0]
             t = torch.randint(0, self.model.timesteps, (batch_size,), device=self.device).long()
             noise = torch.randn_like(x, device=self.device)
-            
+
             # Get noisy x_t using the forward diffusion process
             x_t = self.model.q_sample(x_start=x, t=t, noise=noise)
-            
+
             # Get noise predictions from both models
             with torch.no_grad():
-                noise_pred_old = self.previous_model.backbone(x_t, t, features)  # Previous score
-            
-            noise_pred_new = self.model.backbone(x_t, t, features)              # Current score
-            
-            # Compute L2 regularization loss between score functions
-            reg_loss = F.mse_loss(noise_pred_new, noise_pred_old, reduction='mean')
-            
+                noise_pred_old = self.previous_model.backbone(x_t, t, features)
+            noise_pred_new = self.model.backbone(x_t, t, features)
+
+            # Compute regularization loss with specified distance metric
+            if loss_type == "l1":
+                reg_loss = F.l1_loss(noise_pred_new, noise_pred_old, reduction='mean')
+            elif loss_type == "l2":
+                reg_loss = F.mse_loss(noise_pred_new, noise_pred_old, reduction='mean')
+            else:
+                raise ValueError(f"Unsupported loss_type: {loss_type}")
+
             final_loss = self.lambda_reg * reg_loss
-            print(f"DEBUG: Raw reg_loss: {reg_loss.item():.6f}, Final loss: {final_loss.item():.6f}")
-            
             return final_loss
-            
+
         except Exception as e:
             logger.warning(f"Error computing regularization loss: {e}")
-            print(f"DEBUG ERROR: Exception in regularization: {e}")
             return torch.tensor(0.0, device=self.device, requires_grad=False)
 
 
     def train_epoch(self) -> float:
-        """Train for one epoch with score regularization"""
+        """Train for one epoch with score regularization only"""
         self.model.train()
         if self.previous_model is not None:
-            self.previous_model.eval()  # Ensure previous model stays in eval mode
-        
+            self.previous_model.eval()
+
         total_loss = 0
         total_standard_loss = 0
-        total_reg_loss = 0
+        total_score_reg_loss = 0
         num_batches = 0
+
+        # Update description based on regularization
+        reg_methods = []
+        if self.lambda_reg > 0: 
+            reg_methods.append(f"Score-{self.score_loss_type.upper()}(λ={self.lambda_reg})")
         
-        desc = "Training" if self.lambda_reg == 0.0 else f"Training (λ={self.lambda_reg})"
+        dropout_rate = self.config.get("dropout_rate", 0.0)
+        if dropout_rate > 0: 
+            reg_methods.append(f"Dropout({dropout_rate})")
+
+        desc = "Training" if not reg_methods else f"Training [{'+'.join(reg_methods)}]"
         pbar = tqdm(self.train_loader, desc=desc)
-        
+
         for batch_idx, batch in enumerate(pbar):
             batch = self._move_batch_to_device(batch)
             self.optimizer.zero_grad()
-            
+
             # Standard diffusion loss
             try:
                 output = self.model.training_step(batch)
@@ -410,53 +425,50 @@ class TSDiffTrainer:
                     output = self.model.training_step(batch, batch_idx)
                 except TypeError:
                     output = self.model.training_step(batch, batch_idx, dataloader_idx=0)
-            
+
             standard_loss = self._extract_loss(output)
-            
-            # Score regularization loss (prevents catastrophic forgetting)
-            reg_loss = self.compute_score_regularization_loss(batch)
-            
-            # Combined loss
-            total_loss_batch = standard_loss + reg_loss
+
+            # Score regularization loss (with L1 or L2 distance)
+            score_reg_loss = self.compute_score_regularization_loss(batch, self.score_loss_type)
+
+            # Combined loss (remove weight regularization)
+            total_loss_batch = standard_loss + score_reg_loss
+
             total_loss_batch.backward()
-            
+
             # Gradient clipping
             if self.config.get("gradient_clip_val"):
                 torch.nn.utils.clip_grad_norm_(
                     self.model.parameters(),
                     self.config["gradient_clip_val"]
                 )
-            
+
             self.optimizer.step()
-            
+
             # Update metrics
             total_loss += total_loss_batch.item()
             total_standard_loss += standard_loss.item()
-            total_reg_loss += reg_loss.item()
+            total_score_reg_loss += score_reg_loss.item()
             num_batches += 1
-            
+
             # Update progress bar
+            pbar_dict = {'std': f"{standard_loss.item():.4f}"}
             if self.lambda_reg > 0:
-                pbar.set_postfix({
-                    'std_loss': f"{standard_loss.item():.4f}",
-                    'reg_loss': f"{reg_loss.item():.4f}",
-                    'total': f"{total_loss_batch.item():.4f}"
-                })
-            else:
-                pbar.set_postfix({'loss': standard_loss.item()})
-        
+                pbar_dict[f'score_{self.score_loss_type}'] = f"{score_reg_loss.item():.4f}"
+            pbar_dict['total'] = f"{total_loss_batch.item():.4f}"
+            pbar.set_postfix(pbar_dict)
+
+        # Log detailed metrics
         avg_total_loss = total_loss / num_batches if num_batches > 0 else 0.0
         avg_standard_loss = total_standard_loss / num_batches if num_batches > 0 else 0.0
-        avg_reg_loss = total_reg_loss / num_batches if num_batches > 0 else 0.0
-        
-        # Log detailed metrics
-        if self.lambda_reg > 0:
-            logger.info(f"Epoch metrics - Standard Loss: {avg_standard_loss:.6f}, "
-                       f"Reg Loss: {avg_reg_loss:.6f}, Total Loss: {avg_total_loss:.6f}")
-        else:
-            logger.info(f"Epoch metrics - Loss: {avg_standard_loss:.6f}")
-        
+        avg_score_reg_loss = total_score_reg_loss / num_batches if num_batches > 0 else 0.0
+
+        logger.info(f"Epoch metrics - Standard: {avg_standard_loss:.6f}, "
+                    f"Score_{self.score_loss_type.upper()}: {avg_score_reg_loss:.6f}, "
+                    f"Total: {avg_total_loss:.6f}")
+
         return avg_total_loss
+
 
     # def train_epoch(self) -> float:
     #     """Train for one epoch"""

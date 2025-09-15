@@ -1,21 +1,3 @@
-# # Evaluation configuration
-# model: unconditional
-# diffusion_config: diffusion_small_config
-# normalization: mean
-# use_features: false
-# use_lags: true
-# freq: H  # Will be auto-corrected per dataset
-# context_length: 336
-# prediction_length: 24
-# lr: 1.e-3  # Not used for evaluation
-# init_skip: true
-# sampler: ddpm
-# sampler_params:
-#   guidance: quantile
-#   scale: 2
-# device: cuda:1
-# dropout_rate: 0.3 
-
 # Evaluation configuration
 model: unconditional
 diffusion_config: diffusion_small_config

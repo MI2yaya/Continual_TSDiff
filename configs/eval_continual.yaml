@@ -13,4 +13,4 @@ sampler: ddpm
 sampler_params:
   guidance: quantile
   scale: 2
-device: cuda:0
+device: cuda:1

@@ -5,8 +5,8 @@ use_features: False
 use_lags: True
 dataset: uber_tlc_hourly
 freq: H
-context_length: 336 # 360 for `D`
-prediction_length: 24 # 30 for `D`
+context_length: 336
+prediction_length: 24
 lr: 1.e-3
 init_skip: False
 gradient_clip_val: 0.5
@@ -14,9 +14,8 @@ max_epochs: 1000
 num_batches_per_epoch: 128
 batch_size: 64
 lambda_reg: 1.0
-dropout_rate: 0.01 
-# Used only in callback,
-# the final evaluation uses 100 samples
+score_loss_type: l2  # ← ADD THIS LINE
+dropout_rate: 0.01
 num_samples: 16
 sampler: ddpm
 sampler_params:

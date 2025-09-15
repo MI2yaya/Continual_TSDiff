@@ -1,21 +1,21 @@
-# TSDiff config for pedestrian_counts dataset
 model: unconditional
 diffusion_config: diffusion_small_config
 normalization: mean
 use_features: false
 use_lags: true
 dataset: pedestrian_counts
-freq: H                      # Confirmed hourly frequency
-context_length: 336          # Standardized (14 days * 24 hours)
-prediction_length: 24        # Standardized (24 hour forecast window)
-lr: 5.e-4                   # Lower LR for continual learning
+freq: H
+context_length: 336
+prediction_length: 24
+lr: 5.e-4
 init_skip: true
 gradient_clip_val: 0.5
 max_epochs: 1000
 num_batches_per_epoch: 128
 batch_size: 64
-dropout_rate: 0.01 
+dropout_rate: 0.01
 lambda_reg: 1.0
+score_loss_type: l2  # ← ADD THIS LINE
 sampler: ddpm
 sampler_params:
   guidance: quantile

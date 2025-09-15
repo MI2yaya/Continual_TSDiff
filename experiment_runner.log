@@ -1,0 +1,121 @@
+2025-09-15 12:42:09,986 - INFO - Initializing Continual Learning Experiment Suite
+2025-09-15 12:42:09,986 - INFO - Environment validation passed
+2025-09-15 12:42:09,986 - INFO - ================================================================================
+2025-09-15 12:42:09,986 - INFO - STARTING CONTINUAL LEARNING EXPERIMENTAL SUITE
+2025-09-15 12:42:09,986 - INFO - ================================================================================
+2025-09-15 12:42:09,986 - INFO - Total task orders: 6
+2025-09-15 12:42:09,987 - INFO - Methods to evaluate: ['naive']
+2025-09-15 12:42:09,987 - INFO - Expected total experiments: 6
+2025-09-15 12:42:09,987 - INFO - Processing task order 1/6: ['train_kdd_cup.yaml', 'train_pedestrian_counts.yaml', 'train_uber_tlc.yaml']
+2025-09-15 12:42:09,987 - INFO - Executing method: naive
+2025-09-15 12:42:09,987 - INFO - Starting experiment: naive({}) on order_1_kdd_cup_pedestrian_counts_uber_tlc
+2025-09-15 13:08:29,200 - INFO - Training completed successfully: naive({}) on order_1_kdd_cup_pedestrian_counts_uber_tlc
+2025-09-15 13:08:29,201 - INFO - Starting evaluation for: method_naive
+2025-09-15 13:09:25,027 - INFO - Evaluation completed successfully: method_naive
+2025-09-15 13:09:25,028 - INFO - Processing task order 2/6: ['train_kdd_cup.yaml', 'train_uber_tlc.yaml', 'train_pedestrian_counts.yaml']
+2025-09-15 13:09:25,028 - INFO - Executing method: naive
+2025-09-15 13:09:25,028 - INFO - Starting experiment: naive({}) on order_2_kdd_cup_uber_tlc_pedestrian_counts
+2025-09-15 13:47:22,397 - INFO - Initializing Continual Learning Experiment Suite
+2025-09-15 13:47:22,397 - INFO - Environment validation passed
+2025-09-15 13:47:22,397 - INFO - ================================================================================
+2025-09-15 13:47:22,397 - INFO - STARTING CONTINUAL LEARNING EXPERIMENTAL SUITE
+2025-09-15 13:47:22,397 - INFO - ================================================================================
+2025-09-15 13:47:22,397 - INFO - Total task orders: 1
+2025-09-15 13:47:22,397 - INFO - Methods to evaluate: ['naive']
+2025-09-15 13:47:22,397 - INFO - Expected total experiments: 1
+2025-09-15 13:47:22,397 - INFO - Processing task order 1/1: ['train_kdd_cup.yaml', 'train_pedestrian_counts.yaml', 'train_uber_tlc.yaml']
+2025-09-15 13:47:22,398 - INFO - Executing method: naive
+2025-09-15 13:47:22,398 - INFO - Starting experiment: naive({}) on order_1_kdd_cup_pedestrian_counts_uber_tlc
+2025-09-15 14:16:33,527 - INFO - Training completed successfully: naive({}) on order_1_kdd_cup_pedestrian_counts_uber_tlc
+2025-09-15 14:16:33,529 - INFO - Starting evaluation for: method_naive
+2025-09-15 14:17:34,254 - INFO - Evaluation completed successfully: method_naive
+2025-09-15 14:17:34,254 - INFO - ================================================================================
+2025-09-15 14:17:34,254 - INFO - EXPERIMENTAL SUITE COMPLETED
+2025-09-15 14:17:34,254 - INFO - ================================================================================
+2025-09-15 14:17:34,254 - INFO - Total experiments attempted: 1
+2025-09-15 14:17:34,254 - INFO - Successful training runs: 1
+2025-09-15 14:17:34,254 - INFO - Successful evaluations: 1
+2025-09-15 14:17:34,254 - INFO - Training success rate: 100.0%
+2025-09-15 14:17:34,254 - INFO - Evaluation success rate: 100.0%
+2025-09-15 14:17:34,254 - INFO - Results saved to: ./full_experiments_2
+2025-09-15 14:17:34,255 - INFO - Log file: experiment_runner.log
+2025-09-15 14:17:34,255 - INFO - ================================================================================
+2025-09-15 14:17:34,255 - INFO - All experiments completed successfully
+2025-09-15 14:28:27,853 - INFO - Initializing Continual Learning Experiment Suite
+2025-09-15 14:28:27,853 - INFO - Environment validation passed
+2025-09-15 14:28:27,854 - INFO - ================================================================================
+2025-09-15 14:28:27,854 - INFO - STARTING CONTINUAL LEARNING EXPERIMENTAL SUITE
+2025-09-15 14:28:27,854 - INFO - ================================================================================
+2025-09-15 14:28:27,854 - INFO - Total task orders: 1
+2025-09-15 14:28:27,854 - INFO - Methods to evaluate: ['naive']
+2025-09-15 14:28:27,854 - INFO - Expected total experiments: 1
+2025-09-15 14:28:27,854 - INFO - Processing task order 1/1: ['train_kdd_cup.yaml', 'train_pedestrian_counts.yaml', 'train_uber_tlc.yaml']
+2025-09-15 14:28:27,854 - INFO - Executing method: naive
+2025-09-15 14:28:27,854 - INFO - Starting experiment: naive({}) on order_1_kdd_cup_pedestrian_counts_uber_tlc
+2025-09-15 15:02:00,874 - INFO - Training completed successfully: naive({}) on order_1_kdd_cup_pedestrian_counts_uber_tlc
+2025-09-15 15:02:00,876 - INFO - Starting evaluation for: method_naive
+2025-09-15 15:29:55,435 - INFO - Evaluation completed successfully: method_naive
+2025-09-15 15:29:55,436 - INFO - ================================================================================
+2025-09-15 15:29:55,436 - INFO - EXPERIMENTAL SUITE COMPLETED
+2025-09-15 15:29:55,436 - INFO - ================================================================================
+2025-09-15 15:29:55,436 - INFO - Total experiments attempted: 1
+2025-09-15 15:29:55,436 - INFO - Successful training runs: 1
+2025-09-15 15:29:55,436 - INFO - Successful evaluations: 1
+2025-09-15 15:29:55,436 - INFO - Training success rate: 100.0%
+2025-09-15 15:29:55,436 - INFO - Evaluation success rate: 100.0%
+2025-09-15 15:29:55,436 - INFO - Results saved to: ./full_experiments_2
+2025-09-15 15:29:55,436 - INFO - Log file: experiment_runner.log
+2025-09-15 15:29:55,436 - INFO - ================================================================================
+2025-09-15 15:29:55,436 - INFO - All experiments completed successfully
+2025-09-15 15:51:27,024 - INFO - Initializing Continual Learning Experiment Suite
+2025-09-15 15:51:27,024 - INFO - Environment validation passed
+2025-09-15 15:51:27,024 - INFO - ================================================================================
+2025-09-15 15:51:27,024 - INFO - STARTING CONTINUAL LEARNING EXPERIMENTAL SUITE
+2025-09-15 15:51:27,024 - INFO - ================================================================================
+2025-09-15 15:51:27,024 - INFO - Total task orders: 1
+2025-09-15 15:51:27,024 - INFO - Methods to evaluate: ['dropout']
+2025-09-15 15:51:27,024 - INFO - Expected total experiments: 1
+2025-09-15 15:51:27,024 - INFO - Processing task order 1/1: ['train_kdd_cup.yaml', 'train_pedestrian_counts.yaml', 'train_uber_tlc.yaml']
+2025-09-15 15:51:27,024 - INFO - Executing method: dropout
+2025-09-15 15:51:27,024 - INFO - Starting experiment: dropout({'dropout_rate': 0.3}) on order_1_kdd_cup_pedestrian_counts_uber_tlc
+2025-09-15 16:21:52,043 - INFO - Training completed successfully: dropout({'dropout_rate': 0.3}) on order_1_kdd_cup_pedestrian_counts_uber_tlc
+2025-09-15 16:21:52,045 - INFO - Starting evaluation for: dropout_rate_0.3
+2025-09-15 16:49:54,825 - INFO - Evaluation completed successfully: dropout_rate_0.3
+2025-09-15 16:49:54,825 - INFO - ================================================================================
+2025-09-15 16:49:54,825 - INFO - EXPERIMENTAL SUITE COMPLETED
+2025-09-15 16:49:54,825 - INFO - ================================================================================
+2025-09-15 16:49:54,825 - INFO - Total experiments attempted: 1
+2025-09-15 16:49:54,825 - INFO - Successful training runs: 1
+2025-09-15 16:49:54,825 - INFO - Successful evaluations: 1
+2025-09-15 16:49:54,825 - INFO - Training success rate: 100.0%
+2025-09-15 16:49:54,825 - INFO - Evaluation success rate: 100.0%
+2025-09-15 16:49:54,826 - INFO - Results saved to: ./full_experiments_2
+2025-09-15 16:49:54,826 - INFO - Log file: experiment_runner.log
+2025-09-15 16:49:54,826 - INFO - ================================================================================
+2025-09-15 16:49:54,826 - INFO - All experiments completed successfully
+2025-09-15 16:53:26,184 - INFO - Initializing Continual Learning Experiment Suite
+2025-09-15 16:53:26,184 - INFO - Environment validation passed
+2025-09-15 16:53:26,184 - INFO - ================================================================================
+2025-09-15 16:53:26,184 - INFO - STARTING CONTINUAL LEARNING EXPERIMENTAL SUITE
+2025-09-15 16:53:26,184 - INFO - ================================================================================
+2025-09-15 16:53:26,184 - INFO - Total task orders: 1
+2025-09-15 16:53:26,184 - INFO - Methods to evaluate: ['score_l1']
+2025-09-15 16:53:26,184 - INFO - Expected total experiments: 1
+2025-09-15 16:53:26,184 - INFO - Processing task order 1/1: ['train_kdd_cup.yaml', 'train_pedestrian_counts.yaml', 'train_uber_tlc.yaml']
+2025-09-15 16:53:26,184 - INFO - Executing method: score_l1
+2025-09-15 16:53:26,184 - INFO - Starting experiment: score_l1({'lambda_reg': 1.0}) on order_1_kdd_cup_pedestrian_counts_uber_tlc
+2025-09-15 17:15:03,339 - INFO - Training completed successfully: score_l1({'lambda_reg': 1.0}) on order_1_kdd_cup_pedestrian_counts_uber_tlc
+2025-09-15 17:15:03,339 - INFO - Starting evaluation for: lambda_reg_1.0
+2025-09-15 17:43:00,563 - INFO - Evaluation completed successfully: lambda_reg_1.0
+2025-09-15 17:43:00,563 - INFO - ================================================================================
+2025-09-15 17:43:00,563 - INFO - EXPERIMENTAL SUITE COMPLETED
+2025-09-15 17:43:00,563 - INFO - ================================================================================
+2025-09-15 17:43:00,563 - INFO - Total experiments attempted: 1
+2025-09-15 17:43:00,563 - INFO - Successful training runs: 1
+2025-09-15 17:43:00,563 - INFO - Successful evaluations: 1
+2025-09-15 17:43:00,563 - INFO - Training success rate: 100.0%
+2025-09-15 17:43:00,563 - INFO - Evaluation success rate: 100.0%
+2025-09-15 17:43:00,563 - INFO - Results saved to: ./full_experiments_2
+2025-09-15 17:43:00,563 - INFO - Log file: experiment_runner.log
+2025-09-15 17:43:00,564 - INFO - ================================================================================
+2025-09-15 17:43:00,564 - INFO - All experiments completed successfully

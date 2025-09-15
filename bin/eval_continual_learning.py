@@ -43,7 +43,7 @@ class TSDiffEvaluator:
         self.checkpoint_path = checkpoint_path
         
         # Setup device
-        self.device = torch.device(config.get("device", "cuda:0"))
+        self.device = torch.device(config.get("device", "cuda:1"))
         logger.info(f"Using device: {self.device}")
         
         # Load model and checkpoint
@@ -67,7 +67,7 @@ class TSDiffEvaluator:
                 prediction_length=self.config["prediction_length"],
                 lr=self.config["lr"],
                 init_skip=self.config["init_skip"],
-                dropout_rate=self.config.get("dropout_rate", 0.3),  # ADD THIS LINE
+                dropout_rate=self.config.get("dropout_rate", 0.01),  # ADD THIS LINE
             )
             
             # Load model weights
@@ -255,13 +255,17 @@ def load_config(config_path: str, args: argparse.Namespace) -> dict:
     """Load and update configuration"""
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
-    
-    # Override with command line arguments
-    config["checkpoint_path"] = args.ckpt
-    config["eval_datasets"] = args.eval_datasets
-    config["num_samples"] = args.num_samples
-    
+
+    # Override with command line arguments (only if they exist)
+    if hasattr(args, 'ckpt') and args.ckpt:  # ✅ Fixed
+        config["checkpoint_path"] = args.ckpt
+    if hasattr(args, 'eval_datasets') and args.eval_datasets:  # ✅ Fixed
+        config["eval_datasets"] = args.eval_datasets  
+    if hasattr(args, 'num_samples') and args.num_samples:  # ✅ Fixed
+        config["num_samples"] = args.num_samples
+
     return config
+
 
 def main():
     """Main evaluation function"""

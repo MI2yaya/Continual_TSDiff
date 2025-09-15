@@ -14,12 +14,13 @@ gradient_clip_val: 0.5
 max_epochs: 1000
 num_batches_per_epoch: 128
 batch_size: 64
-dropout_rate: 0.3 
+dropout_rate: 0.01 
+lambda_reg: 1.0
 sampler: ddpm
 sampler_params:
   guidance: quantile
   scale: 2
 use_validation_set: true
 eval_every: 50
-device: cuda:0
+device: cuda:1
 setup: forecasting

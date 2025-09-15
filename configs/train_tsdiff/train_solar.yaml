@@ -13,7 +13,8 @@ gradient_clip_val: 0.5
 max_epochs: 1000
 num_batches_per_epoch: 128
 batch_size: 64
-dropout_rate: 0.3 
+dropout_rate: 0.01
+lambda_reg: 1.0 
 # Used only in callback,
 # the final evaluation uses 100 samples
 num_samples: 16
@@ -23,5 +24,5 @@ sampler_params:
   scale: 8
 use_validation_set: True
 eval_every: 50
-device: cuda:0
+device: cuda:1
 setup: forecasting

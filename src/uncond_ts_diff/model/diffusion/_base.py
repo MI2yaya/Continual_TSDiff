@@ -42,7 +42,7 @@ class TSDiffBase(pl.LightningModule):
         use_features=False,
         use_lags=True,
         lr: float = 1e-3,
-        dropout_rate: float = 0.3,
+        dropout_rate: float = 0.01,
     ):
         super().__init__()
         self.save_hyperparameters()

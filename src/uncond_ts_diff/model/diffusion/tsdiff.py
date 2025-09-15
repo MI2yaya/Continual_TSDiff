@@ -28,7 +28,7 @@ class TSDiff(TSDiffBase):
         use_lags=True,
         init_skip=True,
         lr=1e-3,
-        dropout_rate=0.3,
+        dropout_rate=0.01,
     ):
         super().__init__(
             backbone_parameters,

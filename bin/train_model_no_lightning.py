@@ -16,6 +16,7 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
+import torch.nn.functional as F  # ADD THIS IMPORT
 
 from gluonts.dataset.loader import TrainDataLoader, ValidationDataLoader
 from gluonts.dataset.split import OffsetSplitter, split
@@ -68,7 +69,7 @@ class ModelCheckpoint:
         return False
     
     def save_checkpoint(self, model: torch.nn.Module, optimizer: torch.optim.Optimizer, 
-                       epoch: int, metrics: Dict[str, float], dataset_name: str) -> Path:
+                    epoch: int, metrics: Dict[str, float], dataset_name: str) -> Path:
         """Save model checkpoint"""
         checkpoint_path = self.checkpoint_dir / f"{dataset_name}_checkpoint_best.pth"
         last_checkpoint_path = self.checkpoint_dir / f"{dataset_name}_checkpoint_last.pth"
@@ -82,15 +83,20 @@ class ModelCheckpoint:
             'dataset_name': dataset_name
         }
         
+        # Store the result to avoid calling should_save() twice
+        is_best = self.should_save(metrics)
+        
         # Save best checkpoint if score improved
-        if self.should_save(metrics):
+        if is_best:
             torch.save(checkpoint, checkpoint_path)
             logger.info(f"Saved best checkpoint: {checkpoint_path}")
         
         # Always save last checkpoint
         torch.save(checkpoint, last_checkpoint_path)
         
-        return checkpoint_path if self.should_save(metrics) else last_checkpoint_path
+        # Return the correct path
+        return checkpoint_path if is_best else last_checkpoint_path
+
 
 class EarlyStopping:
     """Early stopping with patience"""
@@ -119,6 +125,16 @@ class TSDiffTrainer:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
+        # Add continual learning parameters
+        self.lambda_reg = config.get("lambda_reg", 0.0)
+        self.previous_model = None
+        
+        print(f"DEBUG: TSDiffTrainer initialized")
+        print(f"DEBUG: lambda_reg from config: {self.lambda_reg}")
+        print(f"DEBUG: Config keys: {list(config.keys())}")
+        
+        logger.info(f"Continual learning lambda_reg: {self.lambda_reg}")
+
         # Setup device
         self.device = torch.device(config["device"])
         logger.info(f"Using device: {self.device}")
@@ -180,10 +196,10 @@ class TSDiffTrainer:
             prediction_length=self.config["prediction_length"],
             lr=self.config["lr"],
             init_skip=self.config["init_skip"],
-            dropout_rate=self.config.get("dropout_rate", 0.3),  # ADD THIS LINE
+            dropout_rate=self.config.get("dropout_rate", 0.01),  # ADD THIS LINE
         )
         model.to(self.device)
-        logger.info(f"Model created with dropout_rate={self.config.get('dropout_rate', 0.3)}")
+        logger.info(f"Model created with dropout_rate={self.config.get('dropout_rate', 0.01)}")
         return model
 
     def _create_optimizer(self) -> torch.optim.Optimizer:
@@ -264,21 +280,129 @@ class TSDiffTrainer:
             raise KeyError(f"No loss found in output. Available keys: {available_keys}")
         else:
             return output
-    
+
+    def set_previous_model(self, checkpoint_path: str):
+        """Load and freeze previous model for regularization"""
+        print(f"DEBUG: set_previous_model called with path: {checkpoint_path}")
+        print(f"DEBUG: lambda_reg = {self.lambda_reg}")
+        print(f"DEBUG: Checkpoint exists: {os.path.exists(checkpoint_path) if checkpoint_path else 'None'}")
+        
+        if checkpoint_path is None or self.lambda_reg == 0.0:
+            self.previous_model = None
+            logger.info("No previous model set (lambda_reg=0 or no checkpoint)")
+            print(f"DEBUG: Exiting early - checkpoint_path={checkpoint_path}, lambda_reg={self.lambda_reg}")
+            return
+            
+        logger.info(f"Loading previous model from: {checkpoint_path}")
+        try:
+            # Check if file exists
+            if not os.path.exists(checkpoint_path):
+                print(f"DEBUG ERROR: Checkpoint file does not exist: {checkpoint_path}")
+                self.previous_model = None
+                return
+                
+            # Create and load previous model
+            self.previous_model = TSDiff(
+                **getattr(diffusion_configs, self.config["diffusion_config"]),
+                freq=self.config["freq"],
+                use_features=self.config["use_features"],
+                use_lags=self.config["use_lags"],
+                normalization=self.config["normalization"],
+                context_length=self.config["context_length"],
+                prediction_length=self.config["prediction_length"],
+                lr=self.config["lr"],
+                init_skip=self.config["init_skip"],
+                dropout_rate=self.config.get("dropout_rate", 0.3),
+            )
+            
+            checkpoint = torch.load(checkpoint_path, map_location='cpu')
+            print(f"DEBUG: Checkpoint loaded, keys: {list(checkpoint.keys())}")
+            
+            self.previous_model.load_state_dict(checkpoint['model_state_dict'])
+            self.previous_model.to(self.device)
+            self.previous_model.eval()
+            
+            # Freeze previous model parameters
+            for param in self.previous_model.parameters():
+                param.requires_grad = False
+            
+            print(f"DEBUG SUCCESS: Previous model loaded successfully")
+            print(f"DEBUG: Previous model is None: {self.previous_model is None}")
+            logger.info("Previous model loaded and frozen successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to load previous model: {e}")
+            print(f"DEBUG ERROR: Exception during loading: {e}")
+            self.previous_model = None
+            raise
+
+
+    def compute_score_regularization_loss(self, batch) -> torch.Tensor:
+        """Compute score function regularization loss"""
+        print(f"DEBUG: compute_score_regularization_loss called")
+        print(f"DEBUG: previous_model is None: {self.previous_model is None}")
+        print(f"DEBUG: lambda_reg: {self.lambda_reg}")
+        
+        if self.previous_model is None or self.lambda_reg == 0.0:
+            print(f"DEBUG: Returning 0 loss - previous_model={self.previous_model is None}, lambda_reg={self.lambda_reg}")
+            return torch.tensor(0.0, device=self.device, requires_grad=False)
+        
+        print(f"DEBUG: Computing regularization loss...")
+        try:
+            # Extract features from batch (reuse model's method)
+            if isinstance(batch, dict):
+                x, _, features = self.model._extract_features(batch)
+            else:
+                x, _ = self.model.scaler(batch, torch.ones_like(batch))
+                features = None
+            
+            # Sample random timesteps and noise
+            batch_size = x.shape[0]
+            t = torch.randint(0, self.model.timesteps, (batch_size,), device=self.device).long()
+            noise = torch.randn_like(x, device=self.device)
+            
+            # Get noisy x_t using the forward diffusion process
+            x_t = self.model.q_sample(x_start=x, t=t, noise=noise)
+            
+            # Get noise predictions from both models
+            with torch.no_grad():
+                noise_pred_old = self.previous_model.backbone(x_t, t, features)  # Previous score
+            
+            noise_pred_new = self.model.backbone(x_t, t, features)              # Current score
+            
+            # Compute L2 regularization loss between score functions
+            reg_loss = F.mse_loss(noise_pred_new, noise_pred_old, reduction='mean')
+            
+            final_loss = self.lambda_reg * reg_loss
+            print(f"DEBUG: Raw reg_loss: {reg_loss.item():.6f}, Final loss: {final_loss.item():.6f}")
+            
+            return final_loss
+            
+        except Exception as e:
+            logger.warning(f"Error computing regularization loss: {e}")
+            print(f"DEBUG ERROR: Exception in regularization: {e}")
+            return torch.tensor(0.0, device=self.device, requires_grad=False)
+
+
     def train_epoch(self) -> float:
-        """Train for one epoch"""
+        """Train for one epoch with score regularization"""
         self.model.train()
+        if self.previous_model is not None:
+            self.previous_model.eval()  # Ensure previous model stays in eval mode
+        
         total_loss = 0
+        total_standard_loss = 0
+        total_reg_loss = 0
         num_batches = 0
         
-        pbar = tqdm(self.train_loader, desc="Training")
+        desc = "Training" if self.lambda_reg == 0.0 else f"Training (λ={self.lambda_reg})"
+        pbar = tqdm(self.train_loader, desc=desc)
+        
         for batch_idx, batch in enumerate(pbar):
-            # Move batch to device
             batch = self._move_batch_to_device(batch)
-            
-            # Forward pass
             self.optimizer.zero_grad()
             
+            # Standard diffusion loss
             try:
                 output = self.model.training_step(batch)
             except TypeError:
@@ -287,25 +411,94 @@ class TSDiffTrainer:
                 except TypeError:
                     output = self.model.training_step(batch, batch_idx, dataloader_idx=0)
             
-            # Extract loss and backward pass
-            loss = self._extract_loss(output)
-            loss.backward()
+            standard_loss = self._extract_loss(output)
+            
+            # Score regularization loss (prevents catastrophic forgetting)
+            reg_loss = self.compute_score_regularization_loss(batch)
+            
+            # Combined loss
+            total_loss_batch = standard_loss + reg_loss
+            total_loss_batch.backward()
             
             # Gradient clipping
             if self.config.get("gradient_clip_val"):
                 torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(), 
+                    self.model.parameters(),
                     self.config["gradient_clip_val"]
                 )
             
             self.optimizer.step()
             
             # Update metrics
-            total_loss += loss.item()
+            total_loss += total_loss_batch.item()
+            total_standard_loss += standard_loss.item()
+            total_reg_loss += reg_loss.item()
             num_batches += 1
-            pbar.set_postfix({'loss': loss.item()})
+            
+            # Update progress bar
+            if self.lambda_reg > 0:
+                pbar.set_postfix({
+                    'std_loss': f"{standard_loss.item():.4f}",
+                    'reg_loss': f"{reg_loss.item():.4f}",
+                    'total': f"{total_loss_batch.item():.4f}"
+                })
+            else:
+                pbar.set_postfix({'loss': standard_loss.item()})
         
-        return total_loss / num_batches if num_batches > 0 else 0.0
+        avg_total_loss = total_loss / num_batches if num_batches > 0 else 0.0
+        avg_standard_loss = total_standard_loss / num_batches if num_batches > 0 else 0.0
+        avg_reg_loss = total_reg_loss / num_batches if num_batches > 0 else 0.0
+        
+        # Log detailed metrics
+        if self.lambda_reg > 0:
+            logger.info(f"Epoch metrics - Standard Loss: {avg_standard_loss:.6f}, "
+                       f"Reg Loss: {avg_reg_loss:.6f}, Total Loss: {avg_total_loss:.6f}")
+        else:
+            logger.info(f"Epoch metrics - Loss: {avg_standard_loss:.6f}")
+        
+        return avg_total_loss
+
+    # def train_epoch(self) -> float:
+    #     """Train for one epoch"""
+    #     self.model.train()
+    #     total_loss = 0
+    #     num_batches = 0
+        
+    #     pbar = tqdm(self.train_loader, desc="Training")
+    #     for batch_idx, batch in enumerate(pbar):
+    #         # Move batch to device
+    #         batch = self._move_batch_to_device(batch)
+            
+    #         # Forward pass
+    #         self.optimizer.zero_grad()
+            
+    #         try:
+    #             output = self.model.training_step(batch)
+    #         except TypeError:
+    #             try:
+    #                 output = self.model.training_step(batch, batch_idx)
+    #             except TypeError:
+    #                 output = self.model.training_step(batch, batch_idx, dataloader_idx=0)
+            
+    #         # Extract loss and backward pass
+    #         loss = self._extract_loss(output)
+    #         loss.backward()
+            
+    #         # Gradient clipping
+    #         if self.config.get("gradient_clip_val"):
+    #             torch.nn.utils.clip_grad_norm_(
+    #                 self.model.parameters(), 
+    #                 self.config["gradient_clip_val"]
+    #             )
+            
+    #         self.optimizer.step()
+            
+    #         # Update metrics
+    #         total_loss += loss.item()
+    #         num_batches += 1
+    #         pbar.set_postfix({'loss': loss.item()})
+        
+    #     return total_loss / num_batches if num_batches > 0 else 0.0
     
     def validate_epoch(self) -> Optional[float]:
         """Validate for one epoch"""
@@ -474,12 +667,14 @@ class TSDiffTrainer:
                 training_history['val_loss'].append(val_loss if val_loss is not None else train_loss)
                 
                 # Save checkpoint
-                dataset_name = self.config['dataset']
+                # Save checkpoint
                 checkpoint_path = self.checkpoint_manager.save_checkpoint(
-                    self.model, self.optimizer, epoch, metrics, dataset_name
+                    self.model, self.optimizer, epoch, metrics, self.config['dataset']  # ← Direct reference
                 )
-                
-                if self.checkpoint_manager.should_save(metrics):
+
+
+                # Update best checkpoint if this was the best
+                if checkpoint_path.name.endswith('_checkpoint_best.pth'):
                     best_checkpoint_path = checkpoint_path
                 
                 # Early stopping
@@ -537,12 +732,13 @@ def load_config(config_path: str, args: argparse.Namespace) -> Dict[str, Any]:
     """Load configuration from YAML file"""
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
-    
+
     # Add command line arguments to config
-    if args.resume_from_checkpoint:
+    if hasattr(args, 'resume_from_checkpoint') and args.resume_from_checkpoint:  # ✅ Fixed
         config["resume_from_checkpoint"] = args.resume_from_checkpoint
-    
+
     return config
+
 
 def main():
     """Main training function"""

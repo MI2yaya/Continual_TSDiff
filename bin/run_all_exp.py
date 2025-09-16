@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 # Experimental configuration
 TASK_ORDERS = [
-    ["train_kdd_cup.yaml", "train_pedestrian_counts.yaml", "train_uber_tlc.yaml"],
-    ["train_kdd_cup.yaml", "train_uber_tlc.yaml", "train_pedestrian_counts.yaml"],
+    # ["train_kdd_cup.yaml", "train_pedestrian_counts.yaml", "train_uber_tlc.yaml"],
+    # ["train_kdd_cup.yaml", "train_uber_tlc.yaml", "train_pedestrian_counts.yaml"],
     ["train_pedestrian_counts.yaml", "train_kdd_cup.yaml", "train_uber_tlc.yaml"],
     ["train_pedestrian_counts.yaml", "train_uber_tlc.yaml", "train_kdd_cup.yaml"],
     ["train_uber_tlc.yaml", "train_kdd_cup.yaml", "train_pedestrian_counts.yaml"],
@@ -32,7 +32,7 @@ TASK_ORDERS = [
 METHODS = {
     "naive": {},
     "dropout": {"dropout_rate": [0.1, 0.3, 0.5]},
-    "score_l1": {"lambda_reg": [0.5, 1.0, 2.0]},
+    "score_l2": {"lambda_reg": [0.5, 1.0, 2.0]},
     "score_l2": {"lambda_reg": [0.5, 1.0, 2.0]},
 }
 
@@ -59,7 +59,7 @@ class ExperimentRunner:
     def generate_order_name(self, task_order: List[str], order_idx: int) -> str:
         """Generate a descriptive name for the task ordering."""
         task_names = [task.replace('train_', '').replace('.yaml', '') for task in task_order]
-        return f"order_{order_idx+1}_{'_'.join(task_names)}"
+        return f"order_{order_idx+3}_{'_'.join(task_names)}"
     
     def run_training_experiment(self, method: str, params: Dict[str, Any], 
                                task_order: List[str], order_idx: int) -> bool:

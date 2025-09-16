@@ -202,7 +202,7 @@ def create_continual_learning_plots(start_series: int = 0, num_series: int = 1):
         # "Dropout": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.5/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth",
         # "L1 Reg": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_score_l1/lambda_reg_2.0/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth",
         # "L2 Reg": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_score_l2/lambda_reg_2.0/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth",
-        "Single Task": "/export/home/anandr/diffusion/Continual_TSDiff/01_pedestrian/pedestrian_counts_checkpoint_best.pth"
+        "Single Task": "/export/home/anandr/diffusion/Continual_TSDiff/01_kdd_cup/kdd_cup_2018_without_missing_checkpoint_best.pth"
     }
     # checkpoints = {
     #     "Naive": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_naive/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth",
@@ -213,7 +213,7 @@ def create_continual_learning_plots(start_series: int = 0, num_series: int = 1):
     # }
     
     config = yaml.safe_load(open("configs/eval_continual.yaml"))
-    target_dataset = "pedestrian_counts"
+    target_dataset = "kdd_cup_2018_without_missing"
     
     # Set seeds for reproducible results
     torch.manual_seed(42)
@@ -294,7 +294,7 @@ def main():
     # create_continual_learning_plots(start_series=5, num_series=1)  # 6th time series
     
     # Option 2: Multiple time series (like original code)
-    create_continual_learning_plots(start_series=2, num_series=10)  # First 3 time series
+    create_continual_learning_plots(start_series=1, num_series=10)  # First 3 time series
     # create_continual_learning_plots(start_series=10, num_series=3)  # Time series 10-12
     
     logger.info("Plotting completed successfully!")

@@ -207,11 +207,18 @@ def main(config, log_dir):
     )
 
     callbacks.append(checkpoint_callback)
-    callbacks.append(RichProgressBar())
+    #callbacks.append(RichProgressBar())
+
+    if config['device'].startswith('cuda') and torch.cuda.is_available():
+        devices = [int(config["device"].split(":")[-1])]
+        accelerator = "gpu"
+    else:
+        devices = 1  # use 1 CPU
+        accelerator = "cpu"
 
     trainer = pl.Trainer(
-        accelerator="gpu" if torch.cuda.is_available() else None,
-        devices=[int(config["device"].split(":")[-1])],
+        accelerator=accelerator,
+        devices=devices,
         max_epochs=config["max_epochs"],
         enable_progress_bar=True,
         num_sanity_val_steps=0,

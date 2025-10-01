@@ -9,3 +9,4 @@ lightning_logs/
 /sm_runs/
 /data/
 /checkpoints/
+venv/

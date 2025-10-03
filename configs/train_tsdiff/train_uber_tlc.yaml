@@ -23,5 +23,5 @@ sampler_params:
   scale: 2
 use_validation_set: True
 eval_every: 50
-device: cuda:1
+device: cuda:0
 setup: forecasting

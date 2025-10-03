@@ -134,6 +134,7 @@ def main(config, log_dir):
     # Setup dataset and data loading
     dataset = get_gts_dataset(dataset_name)
     assert dataset.metadata.freq == freq
+    print(dataset.metadata.prediction_length, prediction_length)
     assert dataset.metadata.prediction_length == prediction_length
 
     if config["setup"] == "forecasting":
@@ -275,7 +276,7 @@ if __name__ == "__main__":
     )
     args, _ = parser.parse_known_args()
 
-    with open(args.config, "r") as fp:
+    with open(args.config, "r", encoding="utf-8") as fp:
         config = yaml.safe_load(fp)
 
     # Update config from command line

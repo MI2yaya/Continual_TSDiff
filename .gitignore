@@ -10,3 +10,6 @@ lightning_logs/
 /data/
 /checkpoints/
 venv/
+conda/
+.conda/
+.venv/

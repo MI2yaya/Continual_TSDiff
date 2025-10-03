@@ -4,24 +4,28 @@ version = "0.1.0"
 description = "TSDiff: An Unconditional Diffusion Model for Time Series"
 authors = []
 dependencies = [
-    "torch~=1.13.1",
-    "pytorch-lightning~=1.9.4",
-    "gluonts[mxnet,pro]~=0.12.3",
-    "matplotlib",
-    "seaborn",
-    "opt_einsum~=3.3.0",
-    "einops",
+    "torch==1.13.1",
+    "pytorch-lightning==1.9.4",
+    "gluonts[torch]==0.12.3",
+    "numpy>=1.18,<1.24",
+    "matplotlib>=3.5,<3.9",
+    "seaborn>=0.12,<0.14",
+    "opt_einsum==3.3.0",
+    "einops>=0.6",
     "black",
-    "tqdm",
-    "scipy",
-    "scikit-learn",
-    "numba",
+    "tqdm>=4.65",
+    "scipy>=1.8,<1.13",
+    "scikit-learn>=1.1,<1.5",
+    "numba>=0.56,<0.60",
     "jupyter",
-    "rich",
-    "pykeops==2.1.1",
+    "ipykernel",
+    "rich>=13.0",
+    # "pykeops==2.1.1"   <-- only re-enable if you really need it
 ]
 readme = "README.md"
-requires-python = ">= 3.8"
+requires-python = ">= 3.9" #adjusted bc of pywinpty
 
 [tool.black]
 line-length = 79
+
+#This is explicitly for windows (conda only, venv breaks), for MACOS use the original pyproject.toml with python=3.8.0

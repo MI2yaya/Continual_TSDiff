@@ -6,11 +6,11 @@ use_lags: False
 dataset: m4_hourly
 freq: H
 context_length: 312 # 360 for `D`
-prediction_length: 48 # 30 for `D`
+prediction_length: 24 # 30 for `D`    #changed from 48 to 24 bc assertion..????
 lr: 1.e-3
 init_skip: False
 gradient_clip_val: 0.5
-max_epochs: 2 # 50-100 for real training 
+max_epochs: 200 # 50-100 for real training    #changed from 50 to 5 for testing
 num_batches_per_epoch: 128
 batch_size: 64
 # Used only in callback,
@@ -22,5 +22,5 @@ sampler_params:
   scale: 2
 use_validation_set: True
 eval_every: 50
-device: cpu # "cuda:1" or "cpu"
+device: cuda:0 # "cuda" or "cpu"
 setup: forecasting

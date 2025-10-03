@@ -38,7 +38,7 @@ class TSDiffPlotter:
     
     def __init__(self, config: dict, checkpoint_path: str):
         self.config = config
-        self.device = torch.device(config.get("device", "cuda:1"))
+        self.device = torch.device("cpu") if config.get("device", "cpu") == "cpu" else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.model = self._load_model(checkpoint_path)
         
     def _load_model(self, checkpoint_path: str) -> TSDiff:
@@ -59,7 +59,6 @@ class TSDiffPlotter:
             dropout_rate=self.config.get("dropout_rate", 0.01),
         )
         
-        model.load_state_dict(checkpoint['model_state_dict'])
         model.to(self.device)
         model.eval()
         return model
@@ -202,16 +201,9 @@ def create_continual_learning_plots(start_series: int = 0, num_series: int = 1):
         # "Dropout": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.5/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth",
         # "L1 Reg": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_score_l1/lambda_reg_2.0/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth",
         # "L2 Reg": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_score_l2/lambda_reg_2.0/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth",
-        "Single Task": "/Users/monicastudent/Downloads/Continual_TSDiff/lightning_logs/version_3/checkpoints/m4_hourly-epoch=014-train_loss=0.059.ckpt" 
+        "Single Task": "C:/Users/micha\Downloads/Michael Petrizzo - Resume/Python/Continual_TSDiff/lightning_logs/version_3/best_checkpoint.ckpt",  #!!!!!!!!!!
     }
-    # checkpoints = {
-    #     "Naive": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_naive/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth",
-    #     "Dropout": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.3/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth",
-    #     "L1 Reg": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_score_l1/lambda_reg_2.0/task_1_kdd_cup_2018_without_missing/kdd_cup_2018_without_missing_checkpoint_best.pth",
-    #     "L2 Reg": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_score_l2/lambda_reg_2.0/task_1_kdd_cup_2018_without_missing/kdd_cup_2018_without_missing_checkpoint_best.pth",
-    #     "Single Task": "/export/home/anandr/diffusion/Continual_TSDiff/01_kdd_cup/kdd_cup_2018_without_missing_checkpoint_best.pth"
-    # }
-    
+
     config = yaml.safe_load(open("configs/eval_continual.yaml"))
     target_dataset = "m4_hourly"                #!!!!!!!!!! CHANGE THIS TOO!!!!
     
@@ -294,7 +286,7 @@ def main():
     # create_continual_learning_plots(start_series=5, num_series=1)  # 6th time series
     
     # Option 2: Multiple time series (like original code)
-    create_continual_learning_plots(start_series=1, num_series=1)  # First 3 time series
+    create_continual_learning_plots(start_series=1, num_series=3)  # First 3 time series
     # create_continual_learning_plots(start_series=10, num_series=3)  # Time series 10-12
     
     logger.info("Plotting completed successfully!")

@@ -187,7 +187,7 @@ if __name__ == "__main__":
     )
     args, _ = parser.parse_known_args()
 
-    with open(args.config, "r") as fp:
+    with open(args.config, "r", encoding="utf-8") as fp:
         config = yaml.safe_load(fp)
 
     # Update config from command line

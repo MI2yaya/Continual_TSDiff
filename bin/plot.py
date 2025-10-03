@@ -13,6 +13,7 @@ import pandas as pd
 import itertools
 from pathlib import Path
 from tqdm.auto import tqdm
+import argparse
 
 from gluonts.dataset.repository.datasets import get_dataset
 from gluonts.evaluation import make_evaluation_predictions
@@ -25,6 +26,7 @@ from uncond_ts_diff.utils import (
     create_transforms,
     create_splitter,
     MaskInput,
+    add_config_to_argparser
 )
 
 # Configure logging
@@ -38,14 +40,14 @@ class TSDiffPlotter:
     
     def __init__(self, config: dict, checkpoint_path: str):
         self.config = config
-        self.device = torch.device("cpu") if config.get("device", "cpu") == "cpu" else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = config['device']
         self.model = self._load_model(checkpoint_path)
         
     def _load_model(self, checkpoint_path: str) -> TSDiff:
         """Load TSDiff model from checkpoint"""
         logger.info(f"Loading: {Path(checkpoint_path).name}")
         
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        checkpoint = torch.load(checkpoint_path, map_location=self.device)
         model = TSDiff(
             **getattr(diffusion_configs, self.config["diffusion_config"]),
             freq=self.config["freq"],
@@ -59,6 +61,19 @@ class TSDiffPlotter:
             dropout_rate=self.config.get("dropout_rate", 0.01),
         )
         
+        if "state_dict" in checkpoint:  # Lightning .ckpt
+            state_dict = checkpoint["state_dict"]
+        elif "model_state_dict" in checkpoint:  # common torch .pth
+            state_dict = checkpoint["model_state_dict"]
+        else:
+            state_dict = checkpoint  # raw state_dict saved directly
+
+        missing, unexpected = model.load_state_dict(state_dict, strict=False)
+        if missing:
+            logger.warning(f"Missing keys when loading state_dict: {missing}")
+        if unexpected:
+            logger.warning(f"Unexpected keys when loading state_dict: {unexpected}")
+
         model.to(self.device)
         model.eval()
         return model
@@ -193,7 +208,7 @@ class TSDiffPlotter:
         ax.legend(fontsize=10, loc='upper left')
 
 
-def create_continual_learning_plots(start_series: int = 0, num_series: int = 1):
+def create_continual_learning_plots(config=None,start_series: int = 0, num_series: int = 1):
     """Create 5-method comparison plots with configurable series selection"""
     #!!!!!!!!!!!! CHANGE THE CKPT PATH TO YOURS!!!!
     checkpoints = { 
@@ -201,29 +216,41 @@ def create_continual_learning_plots(start_series: int = 0, num_series: int = 1):
         # "Dropout": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.5/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth",
         # "L1 Reg": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_score_l1/lambda_reg_2.0/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth",
         # "L2 Reg": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_score_l2/lambda_reg_2.0/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth",
-        "Single Task": "C:/Users/micha\Downloads/Michael Petrizzo - Resume/Python/Continual_TSDiff/lightning_logs/version_3/best_checkpoint.ckpt",  #!!!!!!!!!!
+        "Single Task": "C:/Users/micha/Downloads/Michael Petrizzo - Resume/Python/Continual_TSDiff/lightning_logs/version_1/best_checkpoint.ckpt",  #!!!!!!!!!!
     }
-
-    config = yaml.safe_load(open("configs/eval_continual.yaml"))
-    target_dataset = "m4_hourly"                #!!!!!!!!!! CHANGE THIS TOO!!!!
+    target_dataset = config["dataset"] 
     
     # Set seeds for reproducible results
     torch.manual_seed(42)
     np.random.seed(42)
     
     # Determine figure layout based on num_series
+    # Determine figure layout based on num_series
+    num_methods = len(checkpoints)
+
+    fig, axes = plt.subplots(
+        num_series, num_methods,
+        figsize=(5 * num_methods, 5 * num_series)
+    )
+
+    fig.suptitle(
+        f'Continual Learning Performance (Series {start_series}-{start_series+num_series-1})'
+        if num_series > 1 else f'Continual Learning Performance (Series {start_series})',
+        fontsize=16, fontweight='bold'
+    )
+
+    # ✅ Ensure axes is always 2D
+    if num_series == 1 and num_methods == 1:
+        axes = np.array([[axes]])               # single cell → 2D
+    elif num_series == 1:
+        axes = axes[np.newaxis, :]              # 1 row, many cols
+    elif num_methods == 1:
+        axes = axes[:, np.newaxis]              # many rows, 1 col
+
+
+    # Ensure axes is always 2D for consistency
     if num_series == 1:
-        # Single row of methods
-        fig, axes = plt.subplots(1, 5, figsize=(25, 5))
-        fig.suptitle(f'Continual Learning Performance on KDD Cup Dataset (Series {start_series})', 
-                    fontsize=16, fontweight='bold')
-    else:
-        # Multiple rows: one row per time series
-        fig, axes = plt.subplots(num_series, 5, figsize=(25, 5 * num_series))
-        fig.suptitle(f'Continual Learning Performance on KDD Cup Dataset (Series {start_series}-{start_series+num_series-1})', 
-                    fontsize=16, fontweight='bold')
-        if num_series == 1:
-            axes = axes.reshape(1, -1)  # Ensure 2D array
+        axes = np.atleast_2d(axes)
     
     logger.info(f"Generating plots for {num_series} time series starting from index {start_series}...")
     
@@ -233,20 +260,13 @@ def create_continual_learning_plots(start_series: int = 0, num_series: int = 1):
             forecasts, tss, freq = plotter.generate_forecasts(
                 target_dataset, start_index=start_series, num_series=num_series, num_samples=100
             )
-            
-            # Plot each time series
+
             for series_idx in range(len(forecasts)):
-                if num_series == 1:
-                    ax = axes[method_idx]
-                    title_suffix = ""
-                else:
-                    ax = axes[series_idx, method_idx]
-                    title_suffix = f" (TS{start_series + series_idx})"
+                ax = axes[series_idx, method_idx]
+                plotter.plot_forecast(forecasts[series_idx], tss[series_idx], freq,
+                                    method_name, ax)
                 
-                plotter.plot_forecast(forecasts[series_idx], tss[series_idx], freq, 
-                                    method_name + title_suffix, ax)
-            
-            logger.info(f"✓ {method_name} plots completed")
+                logger.info(f"✓ {method_name} plots completed")
             
         except Exception as e:
             logger.error(f"✗ {method_name} failed: {e}")
@@ -265,9 +285,9 @@ def create_continual_learning_plots(start_series: int = 0, num_series: int = 1):
     
     # Save plot
     if num_series == 1:
-        output_file = f'continual_learning_comparison_series_{start_series}.png'
+        output_file = f'continual_learning_comparison_series_{start_series}_{config["dataset"]}.png'
     else:
-        output_file = f'continual_learning_comparison_series_{start_series}_to_{start_series+num_series-1}.png'
+        output_file = f'continual_learning_comparison_series_{start_series}_to_{start_series+num_series-1}_{config["dataset"]}.png'
     
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     plt.close(fig)
@@ -275,7 +295,7 @@ def create_continual_learning_plots(start_series: int = 0, num_series: int = 1):
     logger.info(f"Comparison plot saved: {output_file}")
 
 
-def main():
+def main(config=None):
     """Main function with configurable parameters"""
     logger.info("Starting TSDiff continual learning comparison")
     
@@ -285,12 +305,34 @@ def main():
     # create_continual_learning_plots(start_series=0, num_series=1)  # First time series
     # create_continual_learning_plots(start_series=5, num_series=1)  # 6th time series
     
+    
     # Option 2: Multiple time series (like original code)
-    create_continual_learning_plots(start_series=1, num_series=3)  # First 3 time series
+    create_continual_learning_plots(config=config,start_series=1, num_series=3)  # First 3 time series
     # create_continual_learning_plots(start_series=10, num_series=3)  # Time series 10-12
     
     logger.info("Plotting completed successfully!")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-c", "--config", type=str, required=True, help="Path to yaml config"
+    )
+    args, _ = parser.parse_known_args()
+
+    with open(args.config, "r", encoding="utf-8") as fp:
+        config = yaml.safe_load(fp)
+
+    # Update config from command line
+    parser = add_config_to_argparser(config=config, parser=parser)
+    args = parser.parse_args()
+    config_updates = vars(args)
+    for k in config.keys() & config_updates.keys():
+        orig_val = config[k]
+        updated_val = config_updates[k]
+        if updated_val != orig_val:
+            logger.info(f"Updated key '{k}': {orig_val} -> {updated_val}")
+    config.update(config_updates)
+
+    main(config=config)
+    

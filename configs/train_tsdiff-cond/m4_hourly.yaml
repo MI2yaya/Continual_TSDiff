@@ -14,7 +14,7 @@ model: conditional
 noise_observed: true
 normalization: mean
 num_batches_per_epoch: 128
-prediction_length: 48
+prediction_length: 24
 setup: forecasting
 use_features: false
 use_lags: false

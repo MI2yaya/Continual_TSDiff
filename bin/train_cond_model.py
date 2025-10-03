@@ -202,7 +202,7 @@ def main(config, log_dir):
     )
 
     callbacks.append(checkpoint_callback)
-    callbacks.append(RichProgressBar())
+    #callbacks.append(RichProgressBar())
 
     trainer = pl.Trainer(
         accelerator="gpu" if torch.cuda.is_available() else None,

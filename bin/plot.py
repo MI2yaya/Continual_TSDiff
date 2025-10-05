@@ -18,9 +18,11 @@ import argparse
 from gluonts.dataset.repository.datasets import get_dataset
 from gluonts.evaluation import make_evaluation_predictions
 from gluonts.dataset.field_names import FieldName
+from gluonts.transform import Identity
 
 import uncond_ts_diff.configs as diffusion_configs
 from uncond_ts_diff.model import TSDiff
+from uncond_ts_diff.model.diffusion.sfdiff import SFDiff
 from uncond_ts_diff.sampler import DDPMGuidance, DDIMGuidance
 from uncond_ts_diff.utils import (
     create_transforms,
@@ -38,29 +40,43 @@ GUIDANCE_MAP = {"ddpm": DDPMGuidance, "ddim": DDIMGuidance}
 class TSDiffPlotter:
     """Simple TSDiff forecast plotter with time series selection"""
     
-    def __init__(self, config: dict, checkpoint_path: str):
+    def __init__(self, config: dict, checkpoint_path: str,model_type: str):
         self.config = config
         self.device = config['device']
-        self.model = self._load_model(checkpoint_path)
+        self.model = self._load_model(checkpoint_path,model_type)
         
-    def _load_model(self, checkpoint_path: str) -> TSDiff:
+    def _load_model(self, checkpoint_path: str,model_type:str):
         """Load TSDiff model from checkpoint"""
         logger.info(f"Loading: {Path(checkpoint_path).name}")
         
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
-        model = TSDiff(
-            **getattr(diffusion_configs, self.config["diffusion_config"]),
-            freq=self.config["freq"],
-            use_features=self.config["use_features"],
-            use_lags=self.config["use_lags"],
-            normalization=self.config["normalization"],
-            context_length=self.config["context_length"],
-            prediction_length=self.config["prediction_length"],
-            lr=self.config["lr"],
-            init_skip=self.config["init_skip"],
-            dropout_rate=self.config.get("dropout_rate", 0.01),
-        )
-        
+        if model_type=="tsdiff":
+            model = TSDiff(
+                **getattr(diffusion_configs, self.config["diffusion_config"]),
+                freq=self.config["freq"],
+                use_features=self.config["use_features"],
+                use_lags=self.config["use_lags"],
+                normalization=self.config["normalization"],
+                context_length=self.config["context_length"],
+                prediction_length=self.config["prediction_length"],
+                lr=self.config["lr"],
+                init_skip=self.config["init_skip"],
+                dropout_rate=self.config.get("dropout_rate", 0.01),
+            )
+        elif model_type=='sfdiff':
+            model = SFDiff(
+                **getattr(diffusion_configs, config["diffusion_config"]),
+                freq=config["freq"],
+                use_features=config["use_features"],
+                normalization=config["normalization"],
+                context_length=config["context_length"],
+                prediction_length=config["prediction_length"],
+                input_dim=config["input_dim"],
+                lr=config["lr"],
+                init_skip=config["init_skip"],
+            )
+        else:
+            raise ValueError
         if "state_dict" in checkpoint:  # Lightning .ckpt
             state_dict = checkpoint["state_dict"]
         elif "model_state_dict" in checkpoint:  # common torch .pth
@@ -79,100 +95,128 @@ class TSDiffPlotter:
         return model
 
     def generate_forecasts(self, dataset_name: str, start_index: int = 0, num_series: int = 1, num_samples: int = 100):
-        """Generate forecasts for multiple time series starting from start_index"""
-        # Load dataset
-        dataset = get_dataset(dataset_name, prediction_length=24, regenerate=True)
-        
-        # Auto-correct frequency
-        actual_freq = str(dataset.metadata.freq)
-        if actual_freq != self.config.get("freq", "H"):
-            self.config["freq"] = actual_freq
-        
-        # Setup transformation and sampler
-        transformation = create_transforms(
+        """Generate forecasts for multiple time series starting from start_index."""
+        from gluonts.dataset.common import ListDataset
+
+
+        # --- Dataset Setup ---
+        if dataset_name.startswith("custom"):
+            from uncond_ts_diff.dataset import get_custom_dataset
+            dataset = get_custom_dataset(
+                dataset_name,
+                samples=self.config.get("samples"),
+                context_length=self.config.get("context_length"),
+                prediction_length=self.config.get("prediction_length"),
+                dt=self.config.get("dt"),
+                q=self.config.get("q"),
+            )
+            freq = self.config.get("freq", "H")
+
+            dataset_list = list(dataset)
+            selected_data = dataset_list[start_index : start_index + num_series+1]
+
+            # Convert to GluonTS ListDataset
+            test = ListDataset(
+                [
+                    {
+                        "start": (
+                            d.get("start", "2020-01-01").to_timestamp(how="start")
+                            if isinstance(d.get("start", "2020-01-01"), pd.Period)
+                            else d.get("start", "2020-01-01")
+                        ),
+                        "target": d["target"],
+                    }
+                    for d in selected_data
+                ],
+                freq=freq,
+            )
+
+        else:
+            # Built-in GluonTS dataset
+            from gluonts.dataset.repository.datasets import get_dataset
+            dataset = get_dataset(dataset_name, prediction_length=self.config["prediction_length"], regenerate=True)
+            freq = str(dataset.metadata.freq)
+            test = dataset.test
+
+        self.config["freq"] = freq
+
+        transformed_testdata = create_transforms(
             num_feat_dynamic_real=0, num_feat_static_cat=0, num_feat_static_real=0,
             time_features=self.model.time_features,
-            prediction_length=self.config["prediction_length"],
-        )
-        
-        Guidance = GUIDANCE_MAP[self.config["sampler"]]
-        sampler_kwargs = self.config.get("sampler_params", {})
-        sampler = Guidance(
-            model=self.model, prediction_length=self.config["prediction_length"],
-            num_samples=num_samples, missing_scenario="none", missing_values=0,
-            **sampler_kwargs,
-        )
-        
-        # Setup data pipeline
-        transformed_testdata = transformation.apply(dataset.test, is_train=False)
+            prediction_length=self.config["prediction_length"]
+        ).apply(test, is_train=False)
+
         test_splitter = create_splitter(
             past_length=self.config["context_length"] + max(self.model.lags_seq),
-            future_length=self.config["prediction_length"], mode="test",
+            future_length=self.config["prediction_length"],
+            mode="test"
         )
         masking_transform = MaskInput(
             FieldName.TARGET, FieldName.OBSERVED_VALUES,
-            self.config["context_length"], "none", 0,
+            self.config["context_length"], "none", 0
         )
-        test_transform = test_splitter + masking_transform
+        selected_data = list(transformed_testdata)[start_index:start_index + num_series]
+        list_ds = selected_data
         
-        # Create predictor
+        transform = test_splitter + masking_transform
+
+
+
+        # --- Build Predictor ---
+        Guidance = GUIDANCE_MAP[self.config["sampler"]]
+        sampler_kwargs = self.config.get("sampler_params", {})
+
+        sampler = Guidance(
+            model=self.model,
+            prediction_length=self.config["prediction_length"],
+            num_samples=num_samples,
+            missing_scenario="none",
+            missing_values=0,
+            **sampler_kwargs,
+        )
+
         predictor = sampler.get_predictor(
-            test_transform, batch_size=max(1, 1280 // num_samples), device=str(self.device),
+            input_transform=transform,
+            batch_size=max(1, 1280 // num_samples),
+            device=str(self.device),
         )
-        
-        # ✅ SELECT SPECIFIC TIME SERIES RANGE
-        selected_series = []
-        try:
-            # Convert to list and slice the desired range
-            testdata_list = list(transformed_testdata)
-            end_index = min(start_index + num_series, len(testdata_list))
-            
-            if start_index >= len(testdata_list):
-                logger.warning(f"Start index {start_index} >= dataset size {len(testdata_list)}. Using index 0.")
-                start_index = 0
-                end_index = min(num_series, len(testdata_list))
-            
-            selected_series = testdata_list[start_index:end_index]
-            
-        except MemoryError:
-            # For large datasets, use itertools
-            logger.info(f"Large dataset detected, using itertools for indices {start_index}-{start_index+num_series-1}")
-            selected_series = list(itertools.islice(transformed_testdata, start_index, start_index + num_series))
-        
-        if not selected_series:
-            logger.warning(f"No series found at indices {start_index}-{start_index+num_series-1}. Using first series.")
-            selected_series = [next(iter(transformed_testdata))]
-        
-        logger.info(f"Selected {len(selected_series)} time series starting from index {start_index}")
-        
-        # Generate forecasts for selected series
+
+        # --- Forecasting ---
         forecast_it, ts_it = make_evaluation_predictions(
-            dataset=selected_series, predictor=predictor, num_samples=num_samples,
+            dataset=list_ds,
+            predictor=predictor,
+            num_samples=num_samples,
         )
-        
-        forecasts = list(tqdm(forecast_it, total=len(selected_series), desc="Generating forecasts"))
+
+        forecasts = list(forecast_it)
         tss = list(ts_it)
-        
-        return forecasts, tss, dataset.metadata.freq
+
+        return forecasts, tss, freq
 
     def plot_forecast(self, forecast, ts, freq, method_name: str, ax):
         """Plot single forecast on given axis"""
         # Handle time series data
         historical_data = ts
-        forecast_start = forecast.start_date
+        if isinstance(forecast, dict):
+            forecast_start = forecast.get("start", "2020-01-01")
+            if isinstance(forecast_start, pd.Period):
+                forecast_start = forecast_start.to_timestamp(how='start')
+        else:
+            forecast_start = forecast.start_date
         
-        # Handle PeriodIndex
+        # Convert historical index to Timestamp
         if hasattr(ts, 'index') and isinstance(ts.index, pd.PeriodIndex):
-            historical_index = ts.index.to_timestamp()
+            historical_index = ts.index.to_timestamp(how='start')  # or 'end'
         else:
             historical_index = ts.index if hasattr(ts, 'index') else pd.date_range(
-                end=forecast_start - pd.Timedelta(hours=1), periods=len(historical_data), freq=freq
+                end=pd.Timestamp(forecast_start) - pd.Timedelta(hours=1),
+                periods=len(historical_data),
+                freq=freq
             )
-        
-        # Handle forecast start
-        if hasattr(forecast_start, 'to_timestamp'):
-            forecast_start = forecast_start.to_timestamp()
-        
+
+        # Convert forecast start to Timestamp if it's a Period
+        if isinstance(forecast_start, pd.Period):
+            forecast_start = forecast_start.to_timestamp(how='start')
         # Create forecast index
         forecast_index = pd.date_range(start=forecast_start, periods=len(forecast.mean), freq=freq)
         
@@ -216,9 +260,10 @@ def create_continual_learning_plots(config=None,start_series: int = 0, num_serie
         # "Dropout": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_dropout/dropout_rate_0.5/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth",
         # "L1 Reg": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_score_l1/lambda_reg_2.0/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth",
         # "L2 Reg": "/export/home/anandr/diffusion/Continual_TSDiff/full_experiments_3/order_1_kdd_cup_pedestrian_counts_uber_tlc/method_score_l2/lambda_reg_2.0/task_3_uber_tlc_hourly/uber_tlc_hourly_checkpoint_best.pth",
-        "Single Task": "C:/Users/micha/Downloads/Michael Petrizzo - Resume/Python/Continual_TSDiff/lightning_logs/version_1/best_checkpoint.ckpt",  #!!!!!!!!!!
+        "Single Task": "C:/Users/micha/Downloads/Michael Petrizzo - Resume/Python/Continual_TSDiff/lightning_logs/version_26/best_checkpoint.ckpt",  #!!!!!!!!!!
     }
-    target_dataset = config["dataset"] 
+    target_dataset = config["dataset"]
+    model_type = config['model_type'].lower()
     
     # Set seeds for reproducible results
     torch.manual_seed(42)
@@ -256,17 +301,25 @@ def create_continual_learning_plots(config=None,start_series: int = 0, num_serie
     
     for method_idx, (method_name, checkpoint_path) in enumerate(checkpoints.items()):
         try:
-            plotter = TSDiffPlotter(config, checkpoint_path)
+            plotter = TSDiffPlotter(config, checkpoint_path,model_type)
             forecasts, tss, freq = plotter.generate_forecasts(
                 target_dataset, start_index=start_series, num_series=num_series, num_samples=100
             )
-
+            print(f"Len forecasts: {len(forecasts)}, Len tss: {len(tss)}")
+            
+            # Plot each time series
             for series_idx in range(len(forecasts)):
-                ax = axes[series_idx, method_idx]
-                plotter.plot_forecast(forecasts[series_idx], tss[series_idx], freq,
-                                    method_name, ax)
+                if num_series == 1:
+                    ax = axes[method_idx]
+                    title_suffix = ""
+                else:
+                    ax = axes[series_idx, method_idx]
+                    title_suffix = f" (TS{start_series + series_idx})"
                 
-                logger.info(f"✓ {method_name} plots completed")
+                plotter.plot_forecast(forecasts[series_idx], tss[series_idx], freq, 
+                                    method_name + title_suffix, ax)
+            
+            logger.info(f"✓ {method_name} plots completed")
             
         except Exception as e:
             logger.error(f"✗ {method_name} failed: {e}")
@@ -282,17 +335,18 @@ def create_continual_learning_plots(config=None,start_series: int = 0, num_serie
                            transform=ax.transAxes, fontsize=12, color='red')
     
     plt.tight_layout()
-    
+
     # Save plot
     if num_series == 1:
-        output_file = f'continual_learning_comparison_series_{start_series}_{config["dataset"]}.png'
+        output_file = f'continual_learning_comparison_series_{start_series}_{config["dataset"].replace(":","_")}.png'
     else:
-        output_file = f'continual_learning_comparison_series_{start_series}_to_{start_series+num_series-1}_{config["dataset"]}.png'
+        output_file = f'continual_learning_comparison_series_{start_series}_to_{start_series+num_series-1}_{config["dataset"].replace(":","_")}.png'
     
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     plt.close(fig)
     
     logger.info(f"Comparison plot saved: {output_file}")
+
 
 
 def main(config=None):
@@ -317,6 +371,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-c", "--config", type=str, required=True, help="Path to yaml config"
+    )
+    parser.add_argument(
+        "-m", "--model_type", type=str, required=True, help="Model Type (tsdiff or sfdiff)"
     )
     args, _ = parser.parse_known_args()
 

@@ -3,7 +3,6 @@
 import numpy as np
 import torch
 import torch.nn.functional as F
-from gluonts.torch.util import lagged_sequence_values
 
 from uncond_ts_diff.predictor import PyTorchPredictorWGrads
 from uncond_ts_diff.utils import extract
@@ -137,18 +136,11 @@ class Guidance(torch.nn.Module):
         context_mask = past_observed_values[:, -self.model.context_length :]
         future_mask = torch.zeros_like(future_target)
         observation_mask = torch.cat([context_mask, future_mask], dim=1)
-        if self.model.use_lags:
-            lagged_mask = lagged_sequence_values(
-                self.model.lags_seq,
-                prior_mask,
-                observation_mask,
-                dim=1,
-            )
-            observation_mask = torch.cat(
-                [observation_mask[:, :, None], lagged_mask], dim=-1
-            )
-        else:
-            observation_mask = observation_mask[:, :, None]
+        
+
+        # add last dimension for input_dim
+        observation_mask = observation_mask[:, :, None].repeat(1, 1, observation.shape[-1]) #
+
 
         observation = observation.repeat_interleave(self.num_samples, dim=0)
         observation_mask = observation_mask.repeat_interleave(

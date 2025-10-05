@@ -9,6 +9,7 @@ import torch
 
 from gluonts.dataset.field_names import FieldName
 from gluonts.evaluation import make_evaluation_predictions, Evaluator
+from gluonts.dataset.split import split
 
 from gluonts.transform import TestSplitSampler, InstanceSplitter
 from pytorch_lightning import Callback
@@ -248,7 +249,11 @@ class EvaluateCallback(Callback):
                 transformed_valdata = self.transformation.apply(
                     ConcatDataset(self.val_data), is_train=False
                 )
+                window_length = predictor_pytorch.prediction_length + getattr(predictor_pytorch, "lead_time", 0)
+                _, test_template = split(transformed_valdata, offset=-window_length)
+                test_data = test_template.generate_instances(window_length)
 
+                print(f"\nNumber of prediction windows generated:", len(test_data.input))  # <-- debug line
                 forecast_it, ts_it = make_evaluation_predictions(
                     dataset=transformed_valdata,
                     predictor=predictor_pytorch,
@@ -257,7 +262,9 @@ class EvaluateCallback(Callback):
 
                 forecasts_pytorch = list(forecast_it)
                 tss_pytorch = list(ts_it)
-
+            
+                
+                #print(f"\nForecast {forecasts_pytorch}")
                 metrics_pytorch, per_ts = evaluator(
                     tss_pytorch, forecasts_pytorch
                 )

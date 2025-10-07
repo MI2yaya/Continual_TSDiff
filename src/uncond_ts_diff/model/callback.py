@@ -171,7 +171,6 @@ class EvaluateCallback(Callback):
         sampler_kwargs,
         num_samples,
         model,
-        transformation,
         test_dataset,
         val_dataset,
         eval_every=50,
@@ -183,7 +182,6 @@ class EvaluateCallback(Callback):
         self.num_samples = num_samples
         self.sampler_kwargs = sampler_kwargs
         self.model = model
-        self.transformation = transformation
         self.test_dataset = test_dataset
         self.val_data = val_dataset
         self.original_state_dict = {}

@@ -147,7 +147,7 @@ def descale(data, scale, scaling_type):
 
 
 
-def split(data, past_length, future_length):
+def time_splitter(data, past_length, future_length):
     newDataset = []
     for arr in data:
         tempDict={}
@@ -158,6 +158,16 @@ def split(data, past_length, future_length):
     
     return np.array(newDataset)
 
-def train_val_splitter(trainingData,offset):
-    #
-    print('todo..')
+def train_test_val_splitter(data,totalLength,ptrain=.6,ptest=.2,pval=.2):
+    assert ptrain+ptest+pval==1
+    newDataset = []
+    tempDict = {}
+    trainIndex=np.floor(totalLength*ptrain)
+    testIndex=trainIndex+np.floor(totalLength*ptest)
+    tempDict['train'] = data[:trainIndex]
+    tempDict['test'] = data[trainIndex:testIndex]
+    if pval>0:
+        tempDict['val'] = data[testIndex:]
+    newDataset.append(tempDict)
+    return np.array(newDataset)
+    

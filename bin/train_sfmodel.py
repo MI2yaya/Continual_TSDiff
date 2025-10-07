@@ -19,7 +19,8 @@ from uncond_ts_diff.sampler import DDPMGuidance, DDIMGuidance
 from uncond_ts_diff.utils import (
     add_config_to_argparser,
     filter_metrics,
-    split,
+    time_splitter,
+    train_test_val_splitter,
 )
 
 guidance_map = {"ddpm": DDPMGuidance, "ddim": DDIMGuidance}
@@ -41,7 +42,7 @@ def create_model(config):
 
 
 def evaluate_guidance(
-    config, model, test_dataset, transformation, num_samples=100
+    config, model, test_dataset, num_samples=100
 ):
     logger.info(f"Evaluating with {num_samples} samples.")
     results = []
@@ -73,9 +74,7 @@ def evaluate_guidance(
             **sampler_kwargs,
         )
 
-        transformed_testdata = transformation.apply(
-            test_dataset, is_train=False
-        )
+        time_testdata = time_splitter(test_dataset,config['context_length'],config['prediction_length'])
         test_splitter = create_splitter(
             past_length=config["context_length"] + max(model.lags_seq),
             future_length=config["prediction_length"],
@@ -130,16 +129,9 @@ def main(config, log_dir):
     num_rolling_evals = int(len(dataset.test) / len(dataset.train))
 
     callbacks = []
-    transformed_data = split(dataset,context_length,prediction_length)
-    if config["use_validation_set"]:
-        train_val_splitter = OffsetSplitter(
-            offset=-config["prediction_length"] * num_rolling_evals
-        )
-        _, val_gen = train_val_splitter.split(training_data)
-        val_data = val_gen.generate_instances(
-            config["prediction_length"], num_rolling_evals
-        )
-
+    time_data = time_splitter(dataset,context_length,prediction_length)
+    if config['use_validation_set']:
+        split_data = train_test_val_splitter(time_data,total_length,.6,.2,.2)
         callbacks = [
             EvaluateCallback(       #edit
                 context_length=config["context_length"],
@@ -148,23 +140,18 @@ def main(config, log_dir):
                 sampler_kwargs=config["sampler_params"],
                 num_samples=config["num_samples"],
                 model=model,
-                test_dataset=dataset.test,
-                val_dataset=val_data,
+                test_dataset=split_data['test'],
+                val_dataset=split_data['val'],
                 eval_every=config["eval_every"],
             )
         ]
-
+    else:
+        split_data = train_test_val_splitter(time_data,total_length,.6,.2,0)
 
     log_monitor = "train_loss"
     filename = dataset_name + "-{epoch:03d}-{train_loss:.3f}"
 
-    data_loader = TrainDataLoader(
-        Cached(transformed_data),
-        batch_size=config["batch_size"],
-        stack_fn=batchify,
-        transform=training_splitter,
-        num_batches_per_epoch=config["num_batches_per_epoch"],
-    )
+
 
     checkpoint_callback = ModelCheckpoint(
         save_top_k=3,
@@ -196,7 +183,7 @@ def main(config, log_dir):
         gradient_clip_val=config.get("gradient_clip_val", None),
     )
     logger.info(f"Logging to {trainer.logger.log_dir}")
-    trainer.fit(model, train_dataloaders=data_loader)
+    trainer.fit(model, train_data=split_data['train'])
     logger.info("Training completed.")
 
     best_ckpt_path = Path(trainer.logger.log_dir) / "best_checkpoint.ckpt"

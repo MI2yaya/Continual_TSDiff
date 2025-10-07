@@ -1,8 +1,8 @@
 model: unconditional
 diffusion_config: diffusion_small_config
 normalization: mean
-use_features: False
-input_dim: 1
+state_dim: 1
+observation_dim: 1
 dataset: custom:sinusoidal
 freq: H
 context_length: 8

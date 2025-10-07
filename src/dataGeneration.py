@@ -24,3 +24,5 @@ def sinusoidalWaves(context_length=100,dt=1,q=1):
         y = x + w
         ys.append(y)
     return xs, ys
+
+#more

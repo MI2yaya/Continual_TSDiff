@@ -88,8 +88,6 @@ class S4Block(nn.Module):
         self.out_linear2 = nn.Conv1d(
             in_channels=d_model, out_channels=d_model, kernel_size=1
         )
-        self.feature_encoder = nn.Conv1d(num_features, d_model, kernel_size=1)
-        
 
         self.additional_dropout = nn.Dropout1d(dropout) if dropout > 0.0 else nn.Identity()
 
@@ -120,14 +118,15 @@ class BackboneModel(nn.Module):
     def __init__(
         self,
         input_dim,
+        meas_dim,
         hidden_dim,
         output_dim,
         step_emb,
         num_residual_blocks,
-        num_features,
         residual_block="s4",
         dropout=0.0,
         init_skip=True,
+        num_features=0
     ):
         super().__init__()
         if residual_block == "s4":

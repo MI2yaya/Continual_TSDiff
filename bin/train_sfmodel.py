@@ -10,26 +10,16 @@ from tqdm.auto import tqdm
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint, RichProgressBar
 
-from gluonts.dataset.loader import TrainDataLoader
-from gluonts.dataset.split import OffsetSplitter
-from gluonts.itertools import Cached
-from gluonts.torch.batchify import batchify
-from gluonts.evaluation import make_evaluation_predictions, Evaluator
-from gluonts.dataset.field_names import FieldName
-from gluonts.dataset.common import ListDataset
 
 import uncond_ts_diff.configs as diffusion_configs
-from uncond_ts_diff.dataset import get_gts_dataset, get_custom_dataset
+from uncond_ts_diff.dataset import get_custom_dataset
 from uncond_ts_diff.model.callback import EvaluateCallback
 from uncond_ts_diff.model.diffusion.sfdiff import SFDiff
 from uncond_ts_diff.sampler import DDPMGuidance, DDIMGuidance
-
 from uncond_ts_diff.utils import (
-    create_transforms,
-    create_splitter,
     add_config_to_argparser,
     filter_metrics,
-    MaskInput,
+    split,
 )
 
 guidance_map = {"ddpm": DDPMGuidance, "ddim": DDIMGuidance}
@@ -43,7 +33,6 @@ def create_model(config):
         normalization=config["normalization"],
         context_length=config["context_length"],
         prediction_length=config["prediction_length"],
-        input_dim=config["input_dim"],
         lr=config["lr"],
         init_skip=config["init_skip"],
     )
@@ -134,58 +123,15 @@ def main(config, log_dir):
     model = create_model(config)
 
     # Setup dataset and data loading
-    if dataset_name.startswith("custom"):
-        dataset = get_custom_dataset(
-            dataset_name,
-            samples=config.get("samples"),
-            context_length=config.get("context_length"),
-            prediction_length=config.get("prediction_length"),
-            dt=config.get("dt"),
-            q=config.get("q"),
-            plot=True,
-        )
-        split_idx = int(len(dataset) * 0.8)
-        training_data = ListDataset(dataset[:split_idx], freq="H")
-        test_data = ListDataset(dataset[split_idx:], freq="H")
+    dataset = get_custom_dataset(dataset_name)
 
-        # fake metadata
-        class DummyMeta:
-            freq = config["freq"]
-            prediction_length = config["prediction_length"]
+    training_data = dataset.train
 
-        dataset = type("CustomDataset", (), {"train": training_data, "test": test_data, "metadata": DummyMeta()})()
-    else:
-        dataset = get_gts_dataset(dataset_name)
-        
-    assert dataset.metadata.freq == freq
-    print(dataset.metadata.prediction_length, prediction_length)
-    assert dataset.metadata.prediction_length == prediction_length
-
-    if config["setup"] == "forecasting":
-        training_data = dataset.train
-    elif config["setup"] == "missing_values":
-        missing_values_splitter = OffsetSplitter(offset=-total_length)
-        training_data, _ = missing_values_splitter.split(dataset.train)
-
-    num_rolling_evals = max(1, int(len(dataset.test) / len(dataset.train)))     #min 1 for safety, if 0 then error!!!!!!!!!
-
-    transformation = create_transforms(
-        num_feat_dynamic_real=0,
-        num_feat_static_cat=0,
-        num_feat_static_real=0,
-        time_features=model.time_features,
-        prediction_length=config["prediction_length"],
-    )
-
-    training_splitter = create_splitter(
-        past_length=config["context_length"],
-        future_length=config["prediction_length"],
-        mode="train",
-    )
+    num_rolling_evals = int(len(dataset.test) / len(dataset.train))
 
     callbacks = []
+    transformed_data = split(dataset,context_length,prediction_length)
     if config["use_validation_set"]:
-        transformed_data = transformation.apply(training_data, is_train=True)
         train_val_splitter = OffsetSplitter(
             offset=-config["prediction_length"] * num_rolling_evals
         )
@@ -193,22 +139,21 @@ def main(config, log_dir):
         val_data = val_gen.generate_instances(
             config["prediction_length"], num_rolling_evals
         )
+
         callbacks = [
-            EvaluateCallback(
+            EvaluateCallback(       #edit
                 context_length=config["context_length"],
                 prediction_length=config["prediction_length"],
                 sampler=config["sampler"],
                 sampler_kwargs=config["sampler_params"],
                 num_samples=config["num_samples"],
                 model=model,
-                transformation=transformation,
                 test_dataset=dataset.test,
                 val_dataset=val_data,
                 eval_every=config["eval_every"],
             )
         ]
-    else:
-        transformed_data = transformation.apply(training_data, is_train=True)
+
 
     log_monitor = "train_loss"
     filename = dataset_name + "-{epoch:03d}-{train_loss:.3f}"
@@ -231,7 +176,7 @@ def main(config, log_dir):
     )
 
     callbacks.append(checkpoint_callback)
-    #callbacks.append(RichProgressBar())
+    callbacks.append(RichProgressBar())
 
     if config['device'].startswith('cuda') and torch.cuda.is_available():
         devices = [int(config["device"].split(":")[-1])]

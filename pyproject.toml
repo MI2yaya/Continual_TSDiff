@@ -1,0 +1,26 @@
+[project]
+name = "uncond-ts-diff"
+version = "0.1.0"
+description = "TSDiff: An Unconditional Diffusion Model for Time Series"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.21,<1.24",
+    "torch==2.2.1+cu118",
+    "pytorch-lightning~=1.9.4",
+    "tqdm",
+    "pyyaml",
+    "matplotlib",
+    "pandas",
+    "scikit-learn",
+    "einops",
+    "opt_einsum",
+    "seaborn",
+    "rich >= 10.2.2"
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+#pip install -e . --extra-index-url https://download.pytorch.org/whl/cu118          

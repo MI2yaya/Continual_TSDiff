@@ -3,7 +3,7 @@
 import copy
 
 import torch
-from uncond_ts_diff.arch import BackboneModel
+from uncond_ts_diff.arch.sfbackbones import SFBackboneModel
 from uncond_ts_diff.model.diffusion._sfbase import SFDiffBase
 
 
@@ -35,8 +35,7 @@ class SFDiff(SFDiffBase):
         print(f'Backbone params: {backbone_parameters}')
 
         self.state_dim = backbone_parameters["state_dim"]
-        self.meas_dim = backbone_parameters["measurement_dim"]
-        self.observation_dim
+        self.observation_dim =backbone_parameters["observation_dim"]
         self.backbone = BackboneModel(
             **backbone_parameters,
             init_skip=init_skip,

@@ -3,11 +3,11 @@
 import copy
 
 import torch
-from uncond_ts_diff.arch import BackboneModel
-from uncond_ts_diff.model.diffusion._base import TSDiffBase
+from uncond_ts_diff.arch.sfbackbones import SFBackboneModel
+from uncond_ts_diff.model.diffusion._sfbase import SFDiffBase
 
 
-class SFDiff(TSDiffBase):
+class SFDiff(SFDiffBase):
     def __init__(
         self,
         backbone_parameters,
@@ -15,17 +15,12 @@ class SFDiff(TSDiffBase):
         diffusion_scheduler,
         context_length,
         prediction_length,
-        input_dim,
-        num_feat_dynamic_real: int = 0,
-        num_feat_static_cat: int = 0,
-        num_feat_static_real: int = 0,
-        cardinalities=None,
-        freq=None,
+        state_dim,
+        observation_dim,
         normalization="none",
-        use_features=False,
         init_skip=True,
         lr=1e-3,
-        dropout_rate=0.01,
+        dropout_rate=0.01
     ):
         super().__init__(
             backbone_parameters,
@@ -33,30 +28,20 @@ class SFDiff(TSDiffBase):
             diffusion_scheduler=diffusion_scheduler,
             context_length=context_length,
             prediction_length=prediction_length,
-            num_feat_dynamic_real=num_feat_dynamic_real,
-            num_feat_static_cat=num_feat_static_cat,
-            num_feat_static_real=num_feat_static_real,
-            cardinalities=cardinalities,
-            freq=freq,
             normalization=normalization,
-            use_features=use_features,
             lr=lr,
             dropout_rate=dropout_rate,
         )
         self.lags_seq=[0] #just for callback past_length=self.context_length + max(self.model.lags_seq),
-        self.freq = freq
         backbone_parameters["dropout"] = dropout_rate
-        backbone_parameters["input_dim"] = input_dim
-        backbone_parameters["output_dim"] = input_dim
-        self.input_dim = backbone_parameters["input_dim"]
-        self.backbone = BackboneModel(
+        backbone_parameters["state_dim"] = state_dim
+        backbone_parameters["observation_dim"] = observation_dim
+        backbone_parameters['output_dim']=state_dim
+        print(backbone_parameters)
+        
+        self.state_dim = state_dim
+        self.backbone = SFBackboneModel(
             **backbone_parameters,
-            num_features=(
-                self.num_feat_static_real
-                + self.num_feat_static_cat
-                + self.num_feat_dynamic_real
-                + 1  # log_scale
-            ),
             init_skip=init_skip,
         )
         self.ema_rate = []  # [0.9999]
@@ -65,74 +50,24 @@ class SFDiff(TSDiffBase):
             for _ in range(len(self.ema_rate))
         ]
 
-    def _extract_features(self, data):
-        prior = data["past_target"][:, : -self.context_length]
-        context = data["past_target"][:, -self.context_length :]
-        context_observed = data["past_observed_values"][
-            :, -self.context_length :
-        ]
-        if self.normalization == "zscore":
-            scaled_context, scale = self.scaler(
-                context, context_observed, data["stats"]
-            )
-        else:
-            scaled_context, scale = self.scaler(context, context_observed)
-        features = []
-
-        scaled_prior = prior / scale
-        scaled_future = data["future_target"] / scale
-        features.append(scale.log())
-
-        x = torch.cat([scaled_context, scaled_future], dim=1)
-        if data["feat_static_cat"] is not None:
-            features.append(self.embedder(data["feat_static_cat"]))
-        if data["feat_static_real"] is not None:
-            features.append(data["feat_static_real"])
-        static_feat = torch.cat(
-            features,
-            dim=1,
-        )
-        expanded_static_feat = static_feat.unsqueeze(1).expand(
-            -1, x.shape[1], -1
-        )
-
-        features = [expanded_static_feat]
-
-        time_features = []
-        if data["past_time_feat"] is not None:
-            time_features.append(
-                data["past_time_feat"][:, -self.context_length :]
-            )
-        if data["future_time_feat"] is not None:
-            time_features.append(data["future_time_feat"])
-        features.append(torch.cat(time_features, dim=1))
-        features = torch.cat(features, dim=-1)
-
-        x = x[:, :, None]
-        if not self.use_features:
-            features = None
-
-        return x, scale[:, :, None], features
-
     @torch.no_grad()
     def sample_n(
         self,
-        num_samples: int = 1
+        num_samples: int = 1,
+        features = None
     ):
         device = next(self.backbone.parameters()).device
-        seq_len = self.context_length + self.prediction_length
+        seq_len = self.context_length  + self.prediction_length #true seq len
 
         samples = torch.randn(
-            (num_samples, seq_len, self.input_dim), device=device
+            (num_samples, seq_len, self.state_dim), device=device
         )
 
         for i in reversed(range(0, self.timesteps)):
             t = torch.full((num_samples,), i, device=device, dtype=torch.long)
-            samples = self.p_sample(samples, t, i, features=None)
-
+            samples = self.p_sample(samples, t, i, features=features)
         samples = samples.cpu().numpy()
-
-        return samples[..., 0]
+        return samples
 
     def on_train_batch_end(self, outputs, batch, batch_idx):
         for rate, state_dict in zip(self.ema_rate, self.ema_state_dicts):

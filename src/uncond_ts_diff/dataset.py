@@ -34,8 +34,8 @@ def get_custom_dataset(dataset_name, samples=10, context_length=80,prediction_le
 
     custom_data = [
         {
-            "state": np.array(state),          
-            "observation": np.array(obs),
+            "state": np.array(state)[..., np.newaxis],         # shape (seq_len, 1)
+            "observation": np.array(obs)[..., np.newaxis],    # shape (seq_len, 1)
         }
         for obs, state in zip(obs_array, state_array)
     ]

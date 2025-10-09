@@ -150,24 +150,38 @@ def descale(data, scale, scaling_type):
 def time_splitter(data, past_length, future_length):
     newDataset = []
     for arr in data:
-        tempDict={}
-        for key in arr.keys():
-            tempDict[f"past_{key}"] = arr[key][:past_length]
-            tempDict[f"future_{key}"] = arr[key][past_length:past_length+future_length]
+        tempDict = {}
+        for key, series in arr.items():
+            tempDict[f"past_{key}"] = series[:past_length]
+            tempDict[f"future_{key}"] = series[past_length:past_length + future_length]
+        
         newDataset.append(tempDict)
-    
-    return np.array(newDataset)
+    return np.array(newDataset, dtype=object)
 
-def train_test_val_splitter(data,totalLength,ptrain=.6,ptest=.2,pval=.2):
-    assert ptrain+ptest+pval==1
-    newDataset = []
-    tempDict = {}
-    trainIndex=np.floor(totalLength*ptrain)
-    testIndex=trainIndex+np.floor(totalLength*ptest)
-    tempDict['train'] = data[:trainIndex]
-    tempDict['test'] = data[trainIndex:testIndex]
-    if pval>0:
-        tempDict['val'] = data[testIndex:]
-    newDataset.append(tempDict)
-    return np.array(newDataset)
-    
+def train_test_val_splitter(data,totalSamples,ptrain=.6,ptest=.2,pval=.2):
+    assert abs(ptrain + ptest + pval - 1) < 1e-6, "Splits must sum to 1"
+    trainIndex = int(totalSamples * ptrain)
+    testIndex = trainIndex + int(totalSamples * ptest)
+    return {
+        "train": data[:trainIndex],
+        "test": data[trainIndex:testIndex],
+        "val": data[testIndex:] if pval > 0 else []
+    }
+
+from torch.utils.data import Dataset
+class StateObsDataset(Dataset):
+    def __init__(self, data):
+        self.data = data  # list of dicts, each with "past_state" and "past_observation"
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        item = self.data[idx]
+        return {
+            "past_state": torch.tensor(item["past_state"], dtype=torch.float32),
+            "past_observation": torch.tensor(item["past_observation"], dtype=torch.float32),
+            "future_state": torch.tensor(item["future_state"], dtype=torch.float32),
+            "future_observation": torch.tensor(item["future_observation"], dtype=torch.float32),
+        }
+        

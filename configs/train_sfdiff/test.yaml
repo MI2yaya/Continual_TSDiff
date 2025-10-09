@@ -8,7 +8,7 @@ freq: H
 context_length: 8
 prediction_length: 2
 dt: 0.05
-samples: 5000
+data_samples: 5000
 lr: 1.e-3
 q: 0.1
 init_skip: False
@@ -23,7 +23,7 @@ sampler: ddpm
 sampler_params:
   guidance: quantile
   scale: 2
-use_validation_set: True
 eval_every: 50
 device: cuda:0 # "cuda" or "cpu"
 setup: forecasting
+checkpoint_path: C:\Users\micha\Downloads\Continual_TSDiff\lightning_logs\version_52\checkpoints\last.ckpt

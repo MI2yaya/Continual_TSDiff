@@ -21,9 +21,7 @@ residual_block_s4_backbone_smallv2 = {
 }
 
 residual_block_s4_backbone_small = {
-    "input_dim": 1,
     "hidden_dim": 64,
-    "output_dim": 1,
     "step_emb": 128,
     "num_residual_blocks": 3,
     "residual_block": "s4",

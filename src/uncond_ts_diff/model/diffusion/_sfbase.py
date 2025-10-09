@@ -1,19 +1,61 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
-from typing import Optional
-
 import numpy as np
 import pandas as pd
-
 import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-
+from typing import Optional
 
 from uncond_ts_diff.utils import extract
 
 
+class NOPScaler(torch.nn.Module):
+
+    def __init__(self, dim=1, keepdim=True):
+        super().__init__()
+        self.dim = dim
+        self.keepdim = keepdim
+
+    def forward(self, x, observed_mask=None, stats=None):
+        scale = torch.ones(x.shape[0], x.shape[2], device=x.device)
+        if self.keepdim:
+            scale = scale.unsqueeze(1)
+        return x, scale
+    
+class MeanScaler(torch.nn.Module):
+    """
+    Scale by the mean absolute value of the time series.
+    Similar to GluonTS MeanScaler.
+    """
+    def __init__(self, dim=1, keepdim=True, eps=1e-8):
+        super().__init__()
+        self.dim = dim
+        self.keepdim = keepdim
+        self.eps = eps
+
+    def forward(self, x, observed_mask=None, stats=None):
+        """
+        Args:
+            x: [batch, seq_len, features]
+            observed_mask: optional mask of valid values, same shape as x
+        Returns:
+            scaled_x: x / scale
+            scale: mean absolute value along dim
+        """
+        if observed_mask is not None:
+            masked_x = x * observed_mask
+            scale = masked_x.abs().sum(dim=self.dim, keepdim=self.keepdim)
+            count = observed_mask.sum(dim=self.dim, keepdim=self.keepdim).clamp(min=1.0)
+            scale = scale / count
+        else:
+            scale = x.abs().mean(dim=self.dim, keepdim=self.keepdim)
+
+        # avoid dividing by zero
+        scale = scale.clamp_min(self.eps)
+        scaled_x = x / scale
+        return scaled_x, scale
 
 class SFDiffBase(pl.LightningModule):
     def __init__(
@@ -23,7 +65,7 @@ class SFDiffBase(pl.LightningModule):
         diffusion_scheduler,
         context_length,
         prediction_length,
-        normalization="none", 
+        normalization="none",
         lr: float = 1e-3,
         dropout_rate: float = 0.01,
     ):
@@ -31,6 +73,7 @@ class SFDiffBase(pl.LightningModule):
         self.save_hyperparameters()
         self.dropout_rate = dropout_rate # reg method 1: dropout
         self.timesteps = timesteps
+        
         self.betas = diffusion_scheduler(timesteps)
         self.sqrt_one_minus_beta = torch.sqrt(1.0 - self.betas)
         self.alphas = 1 - self.betas
@@ -48,21 +91,22 @@ class SFDiffBase(pl.LightningModule):
             * (1.0 - self.alphas_cumprod_prev)
             / (1.0 - self.alphas_cumprod)
         )
+        
         self.logs = {}
         self.normalization = normalization
+
         if normalization == "mean":
             self.scaler = MeanScaler(dim=1, keepdim=True)
         else:
-            raise NotImplementedError
+            self.scaler = NOPScaler(dim=1, keepdim=True)
 
         self.context_length = context_length
         self.prediction_length = prediction_length
+        
         self.losses_running_mean = torch.ones(timesteps, requires_grad=False)
         self.lr = lr
         self.best_crps = np.inf
 
-    def _extract_features(self, data):
-        raise NotImplementedError()
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -262,21 +306,31 @@ class SFDiffBase(pl.LightningModule):
         raise NotImplementedError()
 
     def training_step(self, data, idx):
+        #This is a vitally important step,
+        '''
+        Predict full past_obs+future_state given past_obs
+        '''
         assert self.training is True
         device = next(self.backbone.parameters()).device
-        if isinstance(data, dict):
-            x, _, features = self._extract_features(data)
-        else:
-            x, _ = self.scaler(data, torch.ones_like(data))
 
-        t = torch.randint(
-            0, self.timesteps, (x.shape[0],), device=device
-        ).long()
+        # New: explicitly use states + observations
+        if isinstance(data, dict):
+            x = torch.cat([data["past_state"], data["future_state"]], dim=1).to(device) #concat along time
+            features = torch.cat([data["past_observation"], data["future_observation"]], dim=1).to(device)
+        else:  
+            raise ValueError
+
+
+        x, _ = self.scaler(x)
+
+        # Sample diffusion time step
+        t = torch.randint(0, self.timesteps, (x.shape[0],), device=device).long()
+
+        # Compute DDPM loss
         elbo_loss, xt, noise = self.p_losses(x, t, features, loss_type="l2")
-        return {
-            "loss": elbo_loss,
-            "elbo_loss": elbo_loss,
-        }
+
+        self.log("train_loss", elbo_loss, prog_bar=True, on_step=True, on_epoch=True)
+        return {"loss": elbo_loss, "elbo_loss": elbo_loss}
 
     def training_epoch_end(self, outputs):
         epoch_loss = sum(x["loss"] for x in outputs) / len(outputs)

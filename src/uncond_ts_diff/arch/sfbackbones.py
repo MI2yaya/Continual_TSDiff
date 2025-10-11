@@ -117,7 +117,6 @@ def Conv1dKaiming(in_channels, out_channels, kernel_size):
 class SFBackboneModel(nn.Module):
     def __init__(
         self,
-        state_dim,
         observation_dim,
         hidden_dim,
         output_dim,

@@ -7,6 +7,7 @@ from uncond_ts_diff.arch.sfbackbones import SFBackboneModel
 from uncond_ts_diff.model.diffusion._sfbase import SFDiffBase
 
 
+
 class SFDiff(SFDiffBase):
     def __init__(
         self,
@@ -34,12 +35,10 @@ class SFDiff(SFDiffBase):
         )
         self.lags_seq=[0] #just for callback past_length=self.context_length + max(self.model.lags_seq),
         backbone_parameters["dropout"] = dropout_rate
-        backbone_parameters["state_dim"] = state_dim
         backbone_parameters["observation_dim"] = observation_dim
         backbone_parameters['output_dim']=state_dim
         print(backbone_parameters)
         
-        self.state_dim = state_dim
         self.backbone = SFBackboneModel(
             **backbone_parameters,
             init_skip=init_skip,
@@ -49,6 +48,7 @@ class SFDiff(SFDiffBase):
             copy.deepcopy(self.backbone.state_dict())
             for _ in range(len(self.ema_rate))
         ]
+        self.state_dim = state_dim
 
     @torch.no_grad()
     def sample_n(
@@ -66,7 +66,6 @@ class SFDiff(SFDiffBase):
         for i in reversed(range(0, self.timesteps)):
             t = torch.full((num_samples,), i, device=device, dtype=torch.long)
             samples = self.p_sample(samples, t, i, features=features)
-        samples = samples.cpu().numpy()
         return samples
 
     def on_train_batch_end(self, outputs, batch, batch_idx):

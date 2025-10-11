@@ -162,37 +162,40 @@ class SFDiffBase(pl.LightningModule):
         predicted_noise = self.backbone(x_noisy, t, features)
 
         if loss_type == "l1":
-            loss = F.l1_loss(noise, predicted_noise, reduction=reduction)
+            loss = F.l1_loss(predicted_noise, noise, reduction=reduction)
         elif loss_type == "l2":
-            loss = F.mse_loss(noise, predicted_noise, reduction=reduction)
+            loss = F.mse_loss(predicted_noise, noise, reduction=reduction)
         elif loss_type == "huber":
             loss = F.smooth_l1_loss(
-                noise, predicted_noise, reduction=reduction
+                predicted_noise, noise, reduction=reduction
             )
         else:
             raise NotImplementedError()
 
         return loss, x_noisy, predicted_noise
 
+
+
     @torch.no_grad()
-    def p_sample(self, x, t, t_index, features=None):
+    def p_sample(self, x, t, t_index, features=None, return_tweedie=False):
         betas_t = extract(self.betas, t, x.shape)
-        sqrt_one_minus_alphas_cumprod_t = extract(
-            self.sqrt_one_minus_alphas_cumprod, t, x.shape
-        )
+        sqrt_one_minus_alphas_cumprod_t = extract(self.sqrt_one_minus_alphas_cumprod, t, x.shape)
         sqrt_recip_alphas_t = extract(self.sqrt_recip_alphas, t, x.shape)
+        
         predicted_noise = self.backbone(x, t, features)
+
 
         model_mean = sqrt_recip_alphas_t * (
             x - betas_t * predicted_noise / sqrt_one_minus_alphas_cumprod_t
         )
 
         if t_index == 0:
-            return model_mean
+            sample = model_mean
         else:
             posterior_variance_t = extract(self.posterior_variance, t, x.shape)
-            noise = torch.randn_like(x)
-            return model_mean + torch.sqrt(posterior_variance_t) * noise
+            sample = model_mean + torch.sqrt(posterior_variance_t) * torch.randn_like(x)
+        return sample
+
 
     @torch.no_grad()
     def p_sample_ddim(self, x, t, features=None, noise=None):
@@ -313,21 +316,28 @@ class SFDiffBase(pl.LightningModule):
         assert self.training is True
         device = next(self.backbone.parameters()).device
 
-        # New: explicitly use states + observations
+
         if isinstance(data, dict):
+            # raw observations (unscaled)
             x = torch.cat([data["past_state"], data["future_state"]], dim=1).to(device) #concat along time
-            features = torch.cat([data["past_observation"], data["future_observation"]], dim=1).to(device)
-        else:  
+            past_observation = torch.as_tensor(data["past_observation"], dtype=torch.float32, device=device)
+            future_observation = torch.zeros((past_observation.shape[0], self.prediction_length, past_observation.shape[2]), device=device)
+            features = torch.cat([past_observation, future_observation], dim=1)
+        else:
             raise ValueError
 
 
-        x, _ = self.scaler(x)
+
+        x, scale = self.scaler(x)
+
 
         # Sample diffusion time step
         t = torch.randint(0, self.timesteps, (x.shape[0],), device=device).long()
 
         # Compute DDPM loss
-        elbo_loss, xt, noise = self.p_losses(x, t, features, loss_type="l2")
+        elbo_loss, xt, predicted_score = self.p_losses(x, t, features, loss_type="l2")
+
+        
 
         self.log("train_loss", elbo_loss, prog_bar=True, on_step=True, on_epoch=True)
         return {"loss": elbo_loss, "elbo_loss": elbo_loss}

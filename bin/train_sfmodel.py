@@ -9,7 +9,7 @@ import yaml
 import torch
 from tqdm.auto import tqdm
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import ModelCheckpoint, RichProgressBar
+from pytorch_lightning.callbacks import ModelCheckpoint
 import numpy as np
 
 import uncond_ts_diff.configs as diffusion_configs
@@ -27,20 +27,15 @@ import uncond_ts_diff.utils
 from torch.utils.data import TensorDataset, DataLoader
 import importlib
 
+
 importlib.reload(uncond_ts_diff.utils)
 
-class SafeRichProgressBar(RichProgressBar):
-    def on_train_start(self, trainer, pl_module):
-        try:
-            super().on_train_start(trainer, pl_module)
-        except IndexError:
-            pass
 
 
 def create_model(config,context_length,prediction_length):
     model = SFDiff(
         **getattr(diffusion_configs, config["diffusion_config"]),
-        state_dim=config["state_dim"],
+        state_dim = config["state_dim"],
         observation_dim=config["observation_dim"],
         normalization=config["normalization"],
         context_length=context_length,
@@ -80,17 +75,19 @@ def main(config, log_dir):
             test_dataset = split_data["test"],
             test_batch_size=config['num_samples'],
             eval_every=config['eval_every']
-        ),
-        ModelCheckpoint(
+        )
+    ]
+
+    checkpoint_callback = ModelCheckpoint(
             save_top_k=3,
             monitor="train_loss",
             mode="min",
             filename=f"{dataset_name.replace(':','_')}-{{epoch:03d}}-{{train_loss:.3f}}",
             save_last=True,
             save_weights_only=True,
-        ),
-        SafeRichProgressBar(),
-    ]
+    )
+
+    callbacks.append(checkpoint_callback)
 
     # Trainer setup
     if config["device"].startswith("cuda") and torch.cuda.is_available():
@@ -111,9 +108,17 @@ def main(config, log_dir):
         gradient_clip_val=config.get("gradient_clip_val", None),
     )
 
+
     logger.info(f"Logging to {trainer.logger.log_dir}")
     trainer.fit(model, train_loader)
     logger.info("Training completed and best checkpoint saved.")
+    best_ckpt_path = Path(trainer.logger.log_dir) / "best_checkpoint.ckpt"
+
+    if not best_ckpt_path.exists():
+        torch.save(
+            torch.load(checkpoint_callback.best_model_path)["state_dict"],
+            best_ckpt_path,
+        )
 
 
 

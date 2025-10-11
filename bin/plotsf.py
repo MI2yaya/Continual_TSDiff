@@ -85,16 +85,14 @@ class StateForecastPlotter:
             past_observation = torch.as_tensor(series["past_observation"], dtype=torch.float32)
             if past_observation.ndim == 2:  # shape (batch, seq_len)
                 past_observation = past_observation.unsqueeze(0) 
-            #future_observed = torch.zeros((past_observation.shape[0], self.config["prediction_length"] * scaling, past_observation.shape[2]))
-            future_observed = torch.as_tensor(series['future_observation'],dtype=torch.float32)
-            if future_observed.ndim == 2:  # shape (batch, seq_len)
-                future_observed = future_observed.unsqueeze(0) 
+            future_observed = torch.zeros((past_observation.shape[0], self.config["prediction_length"] * scaling, past_observation.shape[2]))
+
             features = torch.cat([past_observation, future_observed], dim=1).to(device=self.model.device, dtype=torch.float32)
 
 
             # Generate samples from model
-            generated = self.model.sample_n(num_samples=1, features=features)  # shape: (1, total_length, state_dim)
-            forecasts.append(generated[0])
+            generated = self.model.sample_n(num_samples=100, features=features)  # shape: (1, total_length, state_dim)
+            forecasts.append(generated.cpu().numpy())
 
         return forecasts, time_series
 
@@ -110,10 +108,21 @@ class StateForecastPlotter:
         future_observation = series_data['future_observation']
         total_obs = np.concatenate([past_observation, future_observation], axis=0)
 
-        ax.plot(total_state[:, 0], 'b-', linewidth=1.5, label="Ground Truth")
-        ax.plot(total_obs[:, 0], 'g-', linewidth=1.5, label="Observation")
-        ax.plot(forecast[:, 0], 'r--', linewidth=2, label="State Forecast")
-        ax.axvline(x=len(past_state)-1, color='gray', linestyle='--', alpha=0.7)
+        forecast_vals = forecast[:, :, 0] 
+        
+        lower_90 = np.quantile(forecast_vals, 0.05, axis=0)
+        lower_50 = np.quantile(forecast_vals, 0.25, axis=0)
+        upper_50 = np.quantile(forecast_vals, 0.75, axis=0)
+        upper_90 = np.quantile(forecast_vals, 0.95, axis=0)
+        median_forecast = np.median(forecast_vals, axis=0)
+        dataRange = np.arange(0,self.config['prediction_length']+self.config['context_length'],self.config['dt'])
+
+        ax.plot(dataRange,total_state[:, 0], 'b-', linewidth=1.5, label="Ground Truth")
+        ax.plot(dataRange,total_obs[:, 0], 'g-', linewidth=1.5, label="Observation")
+        ax.plot(dataRange,median_forecast, 'r--', linewidth=2, label="Median State Forecast")
+        ax.fill_between(dataRange, lower_90, upper_90, color='indianred', alpha=.3, label='90% Interval')
+        ax.fill_between(dataRange, lower_50, upper_50, color='red', alpha=0.5, label='50% Interval')
+        ax.axvline(x=self.config['context_length'], color='gray', linestyle='--', alpha=0.7)
         ax.set_title(title)
         ax.grid(True)
         ax.legend(fontsize=10)

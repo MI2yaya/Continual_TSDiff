@@ -1,6 +1,6 @@
 model: unconditional
 diffusion_config: diffusion_small_config
-normalization: mean
+normalization: none
 state_dim: 1
 observation_dim: 1
 dataset: custom:sinusoidal
@@ -10,10 +10,10 @@ prediction_length: 2
 dt: 0.05
 data_samples: 5000
 lr: 1.e-3
-q: 0.1
+q: .5
 init_skip: False
 gradient_clip_val: 0.5
-max_epochs: 200 # 50-100 for real training    #changed from 50 to 5 for testing
+max_epochs: 250 # 50-100 for real trainin
 num_batches_per_epoch: 128
 batch_size: 64
 # Used only in callback,
@@ -26,4 +26,4 @@ sampler_params:
 eval_every: 50
 device: cuda:0 # "cuda" or "cpu"
 setup: forecasting
-checkpoint_path: C:\Users\micha\Downloads\Continual_TSDiff\lightning_logs\version_52\checkpoints\last.ckpt
+checkpoint_path: C:\Users\micha\Downloads\Continual_TSDiff\lightning_logs\version_77\best_checkpoint.ckpt

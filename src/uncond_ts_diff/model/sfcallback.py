@@ -251,43 +251,46 @@ class StateMSECallback(Callback):
             return
 
         device = next(self.model.backbone.parameters()).device
-        mse_context_total = 0.0
-        mse_future_total = 0.0
+        mse_context_total = mse_future_total = torch.tensor(0.0, device=device)
         count = 0
+        self.model.eval()
+        with torch.no_grad():
+            for batch in self.test_loader:
+                past_state = batch["past_state"].to(device, non_blocking=True)
+                future_state = batch["future_state"].to(device, non_blocking=True)
+                past_observed = batch["past_observation"].to(device, non_blocking=True)
+                future_observed = torch.zeros(
+                    (past_observed.size(0), self.prediction_length, past_observed.size(2)),
+                    device=device
+                )
+                features = torch.cat([past_observed, future_observed], dim=1).to(dtype=torch.float32)
 
-        for batch in self.test_loader:
-            past_state = batch["past_state"].to(device, dtype=torch.float32)
-            future_state = batch["future_state"].to(device, dtype=torch.float32)
-            
-            past_observed = batch["past_observation"]
-            future_observed = torch.zeros((past_observed.shape[0], self.prediction_length, past_observed.shape[2]))
-            features = torch.cat([past_observed, future_observed], dim=1).to(device=device, dtype=torch.float32)
+                generated = self.model.sample_n(num_samples=past_state.size(0), features=features)
+                if not torch.is_tensor(generated):
+                    generated = torch.from_numpy(generated).to(device)
 
-            batch_size = past_state.shape[0]
+                pred_context = generated[:, :self.context_length]
+                pred_future = generated[:, self.context_length:]
 
-            # Generate predictions
-            generated = self.model.sample_n(num_samples=batch_size, features=features)
-            generated = torch.tensor(generated, device=device, dtype=torch.float32)
-
-            # Compute MSE
-            mse_context = ((generated[:, :self.context_length, :] - past_state) ** 2).mean()
-            mse_future = ((generated[:, self.context_length:, :] - future_state) ** 2).mean()
-
-            mse_context_total += mse_context.item() * batch_size
-            mse_future_total += mse_future.item() * batch_size
-            count += batch_size
+                mse_context_total += ((pred_context - past_state) ** 2).mean() * past_state.size(0)
+                mse_future_total += ((pred_future - future_state) ** 2).mean() * past_state.size(0)
+                count += past_state.size(0)
 
         mse_context_total /= count
         mse_future_total /= count
 
         trainer.logger.log_metrics({
             "mse_context": mse_context_total,
-            "mse_future": mse_future_total
+            "mse_future": mse_future_total,
         }, step=trainer.current_epoch)
+        
+        self.model.train()
+
 
 
 
 def compute_metrics(pred, true):
+    
     mean_pred = pred.mean(axis=0)
     mse = np.mean((mean_pred - true) ** 2)
     rmse = np.sqrt(mse)

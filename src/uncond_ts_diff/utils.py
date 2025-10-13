@@ -152,8 +152,11 @@ def time_splitter(data, past_length, future_length):
     for arr in data:
         tempDict = {}
         for key, series in arr.items():
-            tempDict[f"past_{key}"] = series[:past_length]
-            tempDict[f"future_{key}"] = series[past_length:past_length + future_length]
+            if key=="state" or key=="observation":
+                tempDict[f"past_{key}"] = series[:past_length]
+                tempDict[f"future_{key}"] = series[past_length:past_length + future_length]
+            else:
+                tempDict[key] = series
         
         newDataset.append(tempDict)
     return np.array(newDataset, dtype=object)

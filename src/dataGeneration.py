@@ -1,28 +1,35 @@
 
 import numpy as np
 
-def trainingData(function,samples=10, context_length=100, dt=1,q=1):
-    true_states = []
-    noisy_states = []
-    for sample in range(samples):
-        true_state, noisy_state = function(context_length=context_length, dt=dt,q=q)
+class SinusoidalWaves():
+    def __init__(self,
+        length,
+        dt,
+        q,
+        r,
+        obs_dim = 1,
+        ):
+        self.length = length
+        self.dt = dt
+        self.q = q
+        self.r = r
+        self.obs_dim = obs_dim
+    def h_fn(self, x):
+        return x
 
-        true_states.append(true_state)
-        noisy_states.append(noisy_state)
-    return np.array(noisy_states), np.array(true_states)
-
-def sinusoidalWaves(context_length=100,dt=1,q=1):
-    xs= []
-    ys= []
-    amplitude=np.random.uniform(1,5)
-    frequency=np.random.uniform(1,4)
-    phase=np.random.uniform(0,2*np.pi)
-    for step in range(context_length*(int(dt**-1))):
-        w = np.random.normal(0, q)
-        x = np.sin(frequency*step*dt + phase)*amplitude
-        xs.append(x)
-        y = x + w
-        ys.append(y)
-    return xs, ys
-
-#more
+    def R_inv(self, resid):
+        return resid/(self.r**2)
+    
+    def generate(self):
+        xs=[]
+        ys=[]
+        amplitude=np.random.uniform(1,5)
+        frequency=np.random.uniform(1,4)
+        phase=np.random.uniform(0,2*np.pi)
+        for step in range(self.length*(int(self.dt**-1))):
+            x = np.sin(frequency*step*self.dt + phase)*amplitude + np.random.normal(0,self.q)
+            xs.append(x)
+            y = x + np.random.normal(0,self.r)
+            ys.append(y)
+        return xs, ys
+            

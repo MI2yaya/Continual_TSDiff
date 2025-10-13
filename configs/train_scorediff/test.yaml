@@ -1,0 +1,29 @@
+model: unconditional
+diffusion_config: diffusion_small_config
+normalization: none
+observation_dim: 1
+dataset: custom:sinusoidal
+freq: H
+context_length: 8
+prediction_length: 2
+dt: 0.05
+data_samples: 5000
+lr: 1.e-3
+q: 0.0
+r: 0.1
+init_skip: False
+gradient_clip_val: 0.5
+max_epochs: 250 # 50-100 for real trainin
+num_batches_per_epoch: 78
+batch_size: 64
+# Used only in callback,
+# the final evaluation uses 100 samples
+num_samples: 16
+sampler: ddpm
+sampler_params:
+  guidance: quantile
+  scale: 2
+eval_every: 50
+device: cuda:0 # "cuda" or "cpu"
+setup: forecasting
+checkpoint_path: D:\Users\MichaelPetrizzo2025\Continual_TSDiff\lightning_logs\version_103\best_checkpoint.ckpt

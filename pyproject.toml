@@ -3,7 +3,7 @@ name = "uncond-ts-diff"
 version = "0.1.0"
 description = "TSDiff: An Unconditional Diffusion Model for Time Series"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10.11"
 dependencies = [
     "numpy>=1.21,<1.24",
     "torch==2.2.1+cu118",
@@ -23,4 +23,7 @@ dependencies = [
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
-#pip install -e . --extra-index-url https://download.pytorch.org/whl/cu118          
+      
+#MacOS: dont use torch==2.2.1+cu118, replace with torch>=2.2.1 use python 3.10.11, pip install -e .
+
+#Python: pip install -e . --extra-index-url https://download.pytorch.org/whl/cu118

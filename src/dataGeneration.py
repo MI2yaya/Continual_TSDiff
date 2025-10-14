@@ -68,12 +68,13 @@ class SinusoidalWaves():
         return x
 
     def R_inv(self, resid):
-        return resid/(self.r**2)
+        eps = 1e+3
+        return resid/((self.r)**2+eps)
     
     def generate(self):
         xs=[]
         ys=[]
-        amplitude=np.random.uniform(1,5)
+        amplitude=1
         frequency=np.random.uniform(1,4)
         phase=np.random.uniform(0,2*np.pi)
         for step in range(self.length*(int(self.dt**-1))):

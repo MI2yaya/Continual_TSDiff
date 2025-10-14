@@ -1,13 +1,13 @@
 model: unconditional
 diffusion_config: diffusion_small_config
-normalization: None
+normalization: mean #mean, minmax, maxabs
 observation_dim: 1
 dataset: custom:sinusoidal
 freq: H
 context_length: 8
 prediction_length: 2
 dt: 0.05
-data_samples: 5000
+data_samples: 10000
 lr: 1.e-3
 q: 0.0
 r: 0.1
@@ -26,4 +26,4 @@ sampler_params:
 eval_every: 50
 device: cuda:0 # "cuda" or "cpu"
 setup: forecasting
-checkpoint_path: D:\Users\MichaelPetrizzo2025\Continual_TSDiff\lightning_logs\version_103_5000samples\best_checkpoint.ckpt
+checkpoint_path: D:\Users\MichaelPetrizzo2025\Continual_TSDiff\lightning_logs\version_110_10kmean\best_checkpoint.ckpt

@@ -8,6 +8,8 @@ import pytorch_lightning as pl
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from typing import Optional
 import math
+import matplotlib.pyplot as plt
+
 
 from uncond_ts_diff.utils import extract
 
@@ -224,19 +226,30 @@ class ScoreDiffBase(pl.LightningModule):
 
 
     @torch.no_grad()
-    def p_sample(self, x, t, t_index, y, h_fn, R_inv, base_strength=1.0,cheap=True):
+    def p_sample(self, x, t, t_index, y, h_fn, R_inv, base_strength=1.0,cheap=True,plot=False):
         #given learnt score, predict unconditional model mean and then guide it using score of p(y_t|x_t) from tweedie approximation 
         betas_t = extract(self.betas, t, x.shape)
         sqrt_recip_alphas_t = extract(self.sqrt_recip_alphas, t, x.shape)
         sqrt_one_minus_alphas_cumprod_t = extract(self.sqrt_one_minus_alphas_cumprod, t, x.shape)
-   
-        
-        x, scale = self.scaler(x)
-        
+
+
+ 
+        if plot==True and t_index % 50 ==0:
+            y_cpu = y[0, :, 0].detach().cpu().numpy()
+            guided_cpu = x[0, :, 0].detach().cpu().numpy()
+            plt.figure(figsize=(6, 3))
+            plt.plot(y_cpu, label=f"ys (t={t_index})", alpha=0.7)
+            plt.plot(guided_cpu, label="guided_mean", alpha=0.7)
+            plt.title(f"Sample evolution at step {t_index}")
+            plt.legend()
+            plt.tight_layout()
+            plt.show()
+
         predicted_score = self.backbone(x, t)
         model_mean = sqrt_recip_alphas_t * (
             x - betas_t * predicted_score / sqrt_one_minus_alphas_cumprod_t
         )
+
         
         if cheap:
             with torch.enable_grad():
@@ -246,13 +259,18 @@ class ScoreDiffBase(pl.LightningModule):
                 grad_logp_y = self.observation_grad_expensive(x,t,y,h_fn,R_inv)
 
         
-        grad_logp_y = grad_logp_y.clamp(-1.0, 1.0)
-            
+       
+        #print("Before Grad mean/std:", grad_logp_y.mean().item(), grad_logp_y.std().item())
+        #print("Before clamp range:", grad_logp_y.min().item(), grad_logp_y.max().item())
+        grad_logp_y = grad_logp_y / (grad_logp_y.std(dim=1, keepdim=True) + 1e-5)
+        #print("After Grad mean/std:", grad_logp_y.mean().item(), grad_logp_y.std().item())
+        #print("After clamp range:", grad_logp_y.min().item(), grad_logp_y.max().item())
         guide_strength = base_strength
+
         
         guided_mean = model_mean + guide_strength * betas_t * grad_logp_y
-
-
+        #print(f'Guided Mean ex {guided_mean[0:10]}')
+        #raise ValueError
         if t_index == 0:
             sample = guided_mean
         else:
@@ -279,6 +297,11 @@ class ScoreDiffBase(pl.LightningModule):
             gi = torch.autograd.grad(scalar, x0, retain_graph=True, create_graph=False)[0][i]
             Jt_r.append(gi)
         Jt_r = torch.stack(Jt_r, dim=0)
+        #print("x0 mean/std:", x0.mean().item(), x0.std().item())
+        #print("y_pred mean/std:", y_pred.mean().item(), y_pred.std().item())
+        #print("resid mean/std:", resid.mean().item(), resid.std().item())
+        #print("r mean/std:", r.mean().item(), r.std().item())
+
         return Jt_r
 
     def observation_grad_expensive(self, x_t, t, y, h_fn, R_inv):

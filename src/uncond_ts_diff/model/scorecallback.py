@@ -87,21 +87,7 @@ class ScoreStateMSECallback(Callback):
             mse_context_total += ((pred_context - past_state) ** 2).sum()
             mse_future_total += ((pred_future - future_state) ** 2).sum()
             count += past_state.numel()
-             # Plot first few examples
-            if batch_idx == 0:
-                for i in range(min(self.plot_samples, B)):
-                    plt.figure(figsize=(8,4))
-                    plt.plot(range(self.context_length), past_state[i].cpu().numpy(), 'k-o', label='True Context')
-                    plt.plot(range(self.context_length, self.context_length + self.prediction_length),
-                             future_state[i].cpu().numpy(), 'k--', label='True Future')
-                    plt.plot(range(S),
-                             generated_mean[i].cpu().numpy(), 'r', alpha=0.8, label='Generated')
-                    plt.axvline(self.context_length-0.5, color='gray', linestyle='--')
-                    plt.title(f'Trajectory {i}')
-                    plt.xlabel('Time step')
-                    plt.ylabel('Value')
-                    plt.legend()
-                    plt.show()
+
 
         mse_context_total /= count
         mse_future_total /= count

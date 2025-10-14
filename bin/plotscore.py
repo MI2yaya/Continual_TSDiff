@@ -93,7 +93,7 @@ class StateForecastPlotter:
 
             y = torch.cat([past_observation, future_observed], dim=1).to(device=self.model.device, dtype=torch.float32)
             # Generate samples from model
-            generated = self.model.sample_n(y,num_samples=100,cheap=True,base_strength=.5)
+            generated = self.model.sample_n(y,num_samples=100,cheap=False,base_strength=.5,plot=True)
             forecasts.append(generated.cpu().numpy())
 
         return forecasts, time_series

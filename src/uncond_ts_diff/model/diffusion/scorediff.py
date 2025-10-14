@@ -60,7 +60,8 @@ class ScoreDiff(ScoreDiffBase):
         y,
         num_samples: int = 1,
         cheap=True,
-        base_strength=.1
+        base_strength=.1,
+        plot=False
         
     ):
         device = next(self.backbone.parameters()).device
@@ -69,11 +70,12 @@ class ScoreDiff(ScoreDiffBase):
         samples = torch.randn(
             (num_samples, seq_len, self.observation_dim), device=device
         )
+        y, y_scale = self.scaler(y)
 
         for i in reversed(range(0, self.timesteps)):
             t = torch.full((num_samples,), i, device=device, dtype=torch.long)
-            samples = self.p_sample(samples, t, i, y, self.h_fn,self.R_inv,base_strength=base_strength,cheap=cheap)
-        return samples
+            samples = self.p_sample(samples, t, i, y, self.h_fn,self.R_inv,base_strength=base_strength,cheap=cheap,plot=False)
+        return samples * y_scale
 
     def on_train_batch_end(self, outputs, batch, batch_idx):
         for rate, state_dict in zip(self.ema_rate, self.ema_state_dicts):

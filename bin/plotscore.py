@@ -59,7 +59,7 @@ class StateForecastPlotter:
             logger.warning(f"Missing keys in state_dict: {missing}")
         if unexpected:
             logger.warning(f"Unexpected keys in state_dict: {unexpected}")
-
+        
         model.to(self.device)
         model.eval()
         return model
@@ -93,7 +93,7 @@ class StateForecastPlotter:
 
             y = torch.cat([past_observation, future_observed], dim=1).to(device=self.model.device, dtype=torch.float32)
             # Generate samples from model
-            generated = self.model.sample_n(y,num_samples=100,cheap=False,base_strength=1)
+            generated = self.model.sample_n(y,num_samples=100,cheap=True,base_strength=.5)
             forecasts.append(generated.cpu().numpy())
 
         return forecasts, time_series

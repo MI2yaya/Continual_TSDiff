@@ -74,7 +74,7 @@ class ScoreStateMSECallback(Callback):
             if self.fast_denoise:
                 generated = self.model.fast_sample(y_repeat,num_steps=50)
             else:
-                generated = self.model.sample_n(y_repeat, num_samples=y_repeat.size(0),cheap=True)
+                generated = self.model.sample_n(y_repeat, num_samples=y_repeat.size(0),cheap=True,base_strength=.5)
 
             # Reshape back to [num_mc_samples, batch, seq, dim]
             generated = generated.view(self.num_mc_samples, B, S, D)

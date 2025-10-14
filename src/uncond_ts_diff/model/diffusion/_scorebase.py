@@ -13,7 +13,6 @@ from uncond_ts_diff.utils import extract
 
 
 class NOPScaler(torch.nn.Module):
-
     def __init__(self, dim=1, keepdim=True):
         super().__init__()
         self.dim = dim
@@ -58,6 +57,49 @@ class MeanScaler(torch.nn.Module):
         scaled_x = x / scale
         return scaled_x, scale
 
+class MinMaxScaler(torch.nn.Module):
+    def __init__(self, dim=1, keepdim=True, eps=1e-8):
+        super().__init__()
+        self.dim = dim
+        self.keepdim = keepdim
+        self.eps = eps
+
+    def forward(self, x, observed_mask=None, stats=None):
+        x_min = x.min(dim=self.dim, keepdim=self.keepdim)[0]
+        x_max = x.max(dim=self.dim, keepdim=self.keepdim)[0]
+        scale = (x_max - x_min).clamp_min(self.eps)
+        scaled_x = (x - x_min) / scale
+        return scaled_x, scale
+
+class MaxAbsScaler(torch.nn.Module):
+    """
+    Scale each time series by its maximum absolute value so that all values lie in [-1, 1].
+    """
+    def __init__(self, dim=1, keepdim=True, eps=1e-8):
+        super().__init__()
+        self.dim = dim
+        self.keepdim = keepdim
+        self.eps = eps
+
+    def forward(self, x, observed_mask=None, stats=None):
+        """
+        Args:
+            x: [batch, seq_len, features]
+            observed_mask: optional mask of valid values, same shape as x
+        Returns:
+            scaled_x: x / scale
+            scale: max absolute value along dim
+        """
+        if observed_mask is not None:
+            masked_x = x * observed_mask
+            scale = masked_x.abs().amax(dim=self.dim, keepdim=self.keepdim)
+        else:
+            scale = x.abs().amax(dim=self.dim, keepdim=self.keepdim)
+
+        scale = scale.clamp_min(self.eps)  # avoid dividing by zero
+        scaled_x = x / scale
+        return scaled_x, scale
+
 class ScoreDiffBase(pl.LightningModule):
     def __init__(
         self,
@@ -98,8 +140,13 @@ class ScoreDiffBase(pl.LightningModule):
 
         if normalization == "mean":
             self.scaler = MeanScaler(dim=1, keepdim=True)
+        elif normalization == 'minmax':
+            self.scaler = MinMaxScaler(dim=1,keepdim=True)
+        elif normalization=="maxabs":
+            self.scaler=MaxAbsScaler(dim=1,keepdim=True)
         else:
             self.scaler = NOPScaler(dim=1, keepdim=True)
+        
 
         self.context_length = context_length
         self.prediction_length = prediction_length
@@ -182,8 +229,9 @@ class ScoreDiffBase(pl.LightningModule):
         betas_t = extract(self.betas, t, x.shape)
         sqrt_recip_alphas_t = extract(self.sqrt_recip_alphas, t, x.shape)
         sqrt_one_minus_alphas_cumprod_t = extract(self.sqrt_one_minus_alphas_cumprod, t, x.shape)
+   
         
-        x, _ = self.scaler(x)
+        x, scale = self.scaler(x)
         
         predicted_score = self.backbone(x, t)
         model_mean = sqrt_recip_alphas_t * (
@@ -192,16 +240,13 @@ class ScoreDiffBase(pl.LightningModule):
         
         if cheap:
             with torch.enable_grad():
-                grad_logp_y = self.observation_grad_cheap(x, t, y, h_fn, R_inv)
-            grad_logp_y = grad_logp_y.clamp(-1.0, 1.0)
-            
-                
-            
+                grad_logp_y = self.observation_grad_cheap(x, t, y, h_fn, R_inv) 
         else:
             with torch.enable_grad():
                 grad_logp_y = self.observation_grad_expensive(x,t,y,h_fn,R_inv)
-            grad_logp_y = grad_logp_y.clamp(-1.0, 1.0)
+
         
+        grad_logp_y = grad_logp_y.clamp(-1.0, 1.0)
             
         guide_strength = base_strength
         
@@ -291,6 +336,7 @@ class ScoreDiffBase(pl.LightningModule):
         return np.stack(seqs, axis=0)
 
     def fast_denoise(self, xt, t):
+        xt, scale = self.scaler(xt)
         sqrt_one_minus_alphas_cumprod_t = extract(
             self.sqrt_one_minus_alphas_cumprod, t, xt.shape
         )

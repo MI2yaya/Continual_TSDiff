@@ -54,7 +54,7 @@ def main(config, log_dir):
 
     context_length = config["context_length"] * scaling
     prediction_length = config["prediction_length"] * scaling
-    total_length = context_length + prediction_length
+
 
     dataset, generator = get_custom_dataset(dataset_name,
         samples=config['data_samples'],
@@ -64,7 +64,9 @@ def main(config, log_dir):
         q=config['q'],
         r=config['r'],
         observation_dim=config['observation_dim'],
+        plot=True
         )
+
     model = create_model(config,context_length,prediction_length,generator.h_fn,generator.R_inv)
 
     # Split dataset
@@ -86,6 +88,7 @@ def main(config, log_dir):
             eval_every=config['eval_every'],
             fast_denoise=False,
         )
+
     ]
 
     checkpoint_callback = ModelCheckpoint(

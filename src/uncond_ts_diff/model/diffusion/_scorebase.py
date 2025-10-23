@@ -1,6 +1,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 import numpy as np
+import os
 import pandas as pd
 import torch
 import torch.nn.functional as F
@@ -226,24 +227,11 @@ class ScoreDiffBase(pl.LightningModule):
 
 
     @torch.no_grad()
-    def p_sample(self, x, t, t_index, y, h_fn, R_inv, base_strength=1.0,cheap=True,plot=False):
+    def p_sample(self, x, t, t_index, y, h_fn, R_inv, base_strength=1.0,cheap=True,plot=False,horizon=None):
         #given learnt score, predict unconditional model mean and then guide it using score of p(y_t|x_t) from tweedie approximation 
         betas_t = extract(self.betas, t, x.shape)
         sqrt_recip_alphas_t = extract(self.sqrt_recip_alphas, t, x.shape)
         sqrt_one_minus_alphas_cumprod_t = extract(self.sqrt_one_minus_alphas_cumprod, t, x.shape)
-
-
- 
-        if plot==True and t_index % 50 ==0:
-            y_cpu = y[0, :, 0].detach().cpu().numpy()
-            guided_cpu = x[0, :, 0].detach().cpu().numpy()
-            plt.figure(figsize=(6, 3))
-            plt.plot(y_cpu, label=f"ys (t={t_index})", alpha=0.7)
-            plt.plot(guided_cpu, label="guided_mean", alpha=0.7)
-            plt.title(f"Sample evolution at step {t_index}")
-            plt.legend()
-            plt.tight_layout()
-            plt.show()
 
         predicted_score = self.backbone(x, t)
         model_mean = sqrt_recip_alphas_t * (
@@ -258,24 +246,35 @@ class ScoreDiffBase(pl.LightningModule):
             with torch.enable_grad():
                 grad_logp_y = self.observation_grad_expensive(x,t,y,h_fn,R_inv)
 
-        
-       
-        #print("Before Grad mean/std:", grad_logp_y.mean().item(), grad_logp_y.std().item())
-        #print("Before clamp range:", grad_logp_y.min().item(), grad_logp_y.max().item())
-        grad_logp_y = grad_logp_y / (grad_logp_y.std(dim=1, keepdim=True) + 1e-5)
-        #print("After Grad mean/std:", grad_logp_y.mean().item(), grad_logp_y.std().item())
-        #print("After clamp range:", grad_logp_y.min().item(), grad_logp_y.max().item())
-        guide_strength = base_strength
 
-        
+        guide_strength = base_strength
         guided_mean = model_mean + guide_strength * betas_t * grad_logp_y
-        #print(f'Guided Mean ex {guided_mean[0:10]}')
+
+
         #raise ValueError
         if t_index == 0:
             sample = guided_mean
         else:
             posterior_variance_t = extract(self.posterior_variance, t, x.shape)
             sample = guided_mean + torch.sqrt(posterior_variance_t) * torch.randn_like(x)
+        if horizon is not None:
+            assert horizon<=self.prediction_length
+            sample = sample[:,:self.context_length+horizon,:]
+            
+        if plot:
+            os.makedirs("diffusion_frames", exist_ok=True)
+            plt.figure(figsize=(6, 3))
+            plt.ylim(-1.5, 1.5)
+            y_cpu = y[0, :, 0].detach().cpu().numpy()
+            guided_cpu = guided_mean[0, :, 0].detach().cpu().numpy()  # instead of x
+            plt.plot(y_cpu, label="Observations", alpha=0.7)
+            plt.plot(guided_cpu, label=f"Predicted (t={t_index})", alpha=0.8)
+            plt.title(f"Reverse Diffusion Step {t_index}")
+            plt.legend(loc='lower left')
+            plt.tight_layout()
+            plt.savefig(f"diffusion_frames/step_{t_index:04d}.png")
+            plt.close()  
+        
         return sample
 
     def observation_grad_cheap(self, x_t, t, y, h_fn, R_inv):
@@ -289,6 +288,7 @@ class ScoreDiffBase(pl.LightningModule):
         y_pred = h_fn(x0)
         resid = y - y_pred
         r = R_inv(resid)
+   
 
         # compute J_h^T r per-batch (still per-batch loop, but cheaper since no second vjp)
         Jt_r = []
@@ -297,10 +297,6 @@ class ScoreDiffBase(pl.LightningModule):
             gi = torch.autograd.grad(scalar, x0, retain_graph=True, create_graph=False)[0][i]
             Jt_r.append(gi)
         Jt_r = torch.stack(Jt_r, dim=0)
-        #print("x0 mean/std:", x0.mean().item(), x0.std().item())
-        #print("y_pred mean/std:", y_pred.mean().item(), y_pred.std().item())
-        #print("resid mean/std:", resid.mean().item(), resid.std().item())
-        #print("r mean/std:", r.mean().item(), r.std().item())
 
         return Jt_r
 
@@ -341,7 +337,9 @@ class ScoreDiffBase(pl.LightningModule):
     @torch.no_grad()
     def sample(self, noise, y, h_fn, R_inv):
         device = next(self.backbone.parameters()).device
-        batch_size, length, ch = noise.shape
+        batch_size, seq_len, ch = noise.shape
+        context_len = self.context_length
+
         seq = noise
         seqs = [seq.cpu()]
 
@@ -412,6 +410,7 @@ class ScoreDiffBase(pl.LightningModule):
             "elbo_loss": loss_uncond,
         }
 
+
     def training_epoch_end(self, outputs):
         epoch_loss = sum(x["loss"] for x in outputs) / len(outputs)
         elbo_loss = sum(x["elbo_loss"] for x in outputs) / len(outputs)
@@ -419,7 +418,9 @@ class ScoreDiffBase(pl.LightningModule):
         self.log("train_elbo_loss", elbo_loss)
 
     def validation_step(self, data, idx):
+        # keep validation full-horizon by default (no random horizon) — change if you want
         device = next(self.backbone.parameters()).device
+        # x is expected to already be full sequence [B, context+pred, C]
         x = data
         t = torch.randint(
             0, self.timesteps, (x.shape[0],), device=device

@@ -188,3 +188,18 @@ class StateObsDataset(Dataset):
             "future_observation": torch.tensor(item["future_observation"], dtype=torch.float32),
         }
         
+        
+import imageio
+import os
+from natsort import natsorted
+import shutil
+
+def make_diffusion_gif(output_path="reverse_diffusion.gif", frame_dir="diffusion_frames", fps=20):
+    frames = [imageio.imread(os.path.join(frame_dir, f)) 
+              for f in natsorted(os.listdir(frame_dir)) if f.endswith(".png")]
+    frames.reverse()
+    pause_frames = int(3 * fps)
+    frames += [frames[-1]] * pause_frames
+    imageio.mimsave(output_path, frames, fps=fps, loop=0)
+    print(f"Saved GIF: {output_path}")
+    shutil.rmtree(frame_dir)

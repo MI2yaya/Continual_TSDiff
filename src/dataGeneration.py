@@ -1,6 +1,6 @@
 
 import numpy as np
-
+import torch
 def make_kf_matrices_for_sinusoid(generator, past_obs=None, mode="const_vel"):
     """
     generator: SinusoidalWaves instance (has .dt, .q, .r)
@@ -24,10 +24,6 @@ def make_kf_matrices_for_sinusoid(generator, past_obs=None, mode="const_vel"):
         return A, H, Q, R
 
     elif mode == "osc":
-        if past_obs is None or len(past_obs) < 8:
-            # fallback
-            return make_kf_matrices_for_sinusoid(generator, past_obs, mode="const_vel")
-
         # estimate dominant frequency via FFT
         x = np.asarray(past_obs).astype(float).flatten()
         x = x - x.mean()
@@ -68,19 +64,79 @@ class SinusoidalWaves():
         return x
 
     def R_inv(self, resid):
-        eps = 1e+3
-        return resid/((self.r)**2+eps)
+        eps = 1e-6
+        var = (self.r ** 2) + eps
+        R_inv = resid / var
+        R_inv = R_inv / (R_inv.std(dim=1, keepdim=True) + 1e-5)
+        return R_inv
+    
     
     def generate(self):
         xs=[]
         ys=[]
-        amplitude=1
-        frequency=np.random.uniform(1,4)
+        amplitude=np.random.uniform(1,5.0)
+        frequency=np.random.uniform(1,5.0)
         phase=np.random.uniform(0,2*np.pi)
         for step in range(self.length*(int(self.dt**-1))):
             x = np.sin(frequency*step*self.dt + phase)*amplitude + np.random.normal(0,self.q)
             xs.append(x)
-            y = x + np.random.normal(0,self.r)
+            y =  x + np.random.normal(0,self.r)
             ys.append(y)
         return xs, ys
-            
+    
+    
+    
+class FourthOrderRungeKutta():
+    def __init__(self,
+        length,
+        dt,
+        q,
+        r,
+        obs_dim = 1,
+        ):
+        self.length = length
+        self.dt = dt
+        self.r = r
+    def f(self,z):
+        z1_dot = 10*(z[1] - z[0])
+        z2_dot = z[0] * (28 - z[2]) - z[1]
+        z3_dot = z[0] * z[1] - (8/3) * z[2]
+        return np.array([z1_dot,z2_dot,z3_dot])
+    
+    def h_fn(self,x):
+        return 0.5 * (x[..., 0]**2 + x[..., 1]**2) + 0.7 * x[..., 2:3] 
+    
+    def R_inv(self,resid):
+        eps = 1e-6
+        var = (self.r ** 2) + eps
+        R_inv = resid / var
+        R_inv = R_inv / (R_inv.std(dim=1, keepdim=True) + 1e-5)
+        return R_inv
+    
+    def RK4_step(self,z):
+        k1 = self.f(z)
+        k2 = self.f(z + (self.dt/2)*k1)
+        k3 = self.f(z + (self.dt/2)*k2)
+        k4 = self.f(z + self.dt*k3)
+        return z + (self.dt / 6) * (k1+2*k2+2*k3+k4)
+    
+    def nextUpdate(self,z):
+        z = self.RK4_step(z)
+        noise = np.random.multivariate_normal(mean=np.zeros(3), cov=(0.02**2) * np.eye(3))
+        return z + noise
+    
+    def measurement(self,z):
+        y = .5 * (z[0]**2 + z[1]**2) + .7*z[2]
+        noise = np.random.normal(0,self.r)
+        return y + noise
+    
+    def generate(self):
+        z = np.zeros(3)
+        xs=[]
+        ys=[]
+        num_steps = int(self.length / self.dt)
+        for _ in range(num_steps):
+            z = self.nextUpdate(z)
+            xs.append(z)
+            ys.append(self.measurement(z))
+        return xs,ys

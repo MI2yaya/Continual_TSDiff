@@ -70,7 +70,7 @@ class StateForecastPlotter:
         scaling = int(self.config['dt']**-1)
         
         dataset, generator = get_custom_dataset(dataset_name,
-            samples=self.config['data_samples'],
+            samples=num_series-start_index,
             context_length=self.config["context_length"],
             prediction_length=self.config["prediction_length"],
             dt=self.config['dt'],
@@ -95,6 +95,7 @@ class StateForecastPlotter:
             # Generate samples from model
             generated = self.model.sample_n(y,num_samples=100,cheap=True,base_strength=.5,plot=True)
             forecasts.append(generated.cpu().numpy())
+            break # Remove this break to process all series
 
         return forecasts, time_series
 

@@ -16,7 +16,9 @@ dependencies = [
     "einops",
     "opt_einsum",
     "seaborn",
-    "rich >= 10.2.2"
+    "rich >= 10.2.2",
+    "imageio",
+    "natsort"
 ]
 
 [build-system]

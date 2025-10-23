@@ -1,0 +1,30 @@
+model: unconditional
+diffusion_config: diffusion_small_config
+normalization: None #mean, minmax, maxabs
+observation_dim: 1
+dataset: custom:fourthorderrungekutta
+freq: H
+context_length: 12
+prediction_length: 8
+dt: .05
+data_samples: 10000
+lr: 1.e-3
+q: 0.0
+r: .1
+init_skip: False
+gradient_clip_val: 0.5
+max_epochs: 250 
+num_batches_per_epoch: 100
+batch_size: 64
+# Used only in callback,
+# the final evaluation uses 100 samples
+num_samples: 16
+sampler: ddpm
+sampler_params:
+  guidance: quantile
+  scale: 2
+eval_every: 50
+device: cuda:0 # "cuda:0" for windows, "mps" for mac ONLY FOR TRAINING(breaks during forecasts), "cpu" for default
+setup: forecasting
+checkpoint_path: D:\Users\MichaelPetrizzo2025\Continual_TSDiff\lightning_logs\version_132\checkpoints\last.ckpt
+#checkpoint_path: /Users/monicastudent/Downloads/Continual_TSDiff/lightning_logs/version_7/best_checkpoint.ckpt

@@ -29,3 +29,5 @@ build-backend = "setuptools.build_meta"
 #MacOS: dont use torch==2.2.1+cu118, replace with torch>=2.2.1 use python 3.10.11, pip install -e .
 
 #Python: pip install -e . --extra-index-url https://download.pytorch.org/whl/cu118
+
+#imageio and natsort are solely for gif generation, remove if necessary

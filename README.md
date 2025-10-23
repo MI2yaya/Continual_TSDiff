@@ -19,7 +19,7 @@ pip install --editable "."
 
 ```sh
 # Train StateDiff on Sinusoidal
-python bin/train_scoremodel.py -c configs/train_sfdiff/sin.yaml
+python bin/train_scoremodel.py -c configs/train_scorediff/sin.yaml
 
 
 ### Evaluating Models
@@ -31,7 +31,7 @@ Use the `plotscore.py` script to run the forecasting experiments.
 Example commands:
 ```sh
 # Run observation self-guidance on the trained dataset
-python bin/plotscore.py -c configs/train_sfdiff/sin.yaml
+python bin/plotscore.py -c configs/train_scorediff/sin.yaml
 
 
 
